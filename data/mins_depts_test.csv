@@ -43,3 +43,7 @@ Department,Department of National Zoological Gardens,colombozoo.gov.lk
 Department,Department of Examinations,doenets.lk
 Department,Department of Archaeology,archaeology.gov.lk
 Department,LSF,opensource.lk
+Expired,Expired SSL,expired.badssl.com
+Self-Signed,Self-Signed SSL,self-signed.badssl.com
+Wrong Host,Wrong Host SSL,wrong.host.badssl.com
+Never SSL,Never SSL,neverssl.com

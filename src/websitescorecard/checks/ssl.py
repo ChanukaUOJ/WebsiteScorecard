@@ -25,7 +25,7 @@ class SSLCheck:
         try:
             parsed = parse_url(url)
         except ValueError as exc:
-            return CheckResult(status="no_certificate", error=str(exc))
+            return CheckResult(status="unreachable", error=str(exc))
 
         context = ssl.create_default_context()
 
@@ -52,29 +52,42 @@ class SSLCheck:
                     now = datetime.now(timezone.utc)
 
                     if not_after < now:
-                        return CheckResult(status="expired", error=None)
+                        return CheckResult(
+                            status="expired", error="Certificate has expired"
+                        )
 
                     return CheckResult(status="valid", error=None)
 
         except ssl.SSLCertVerificationError as exc:
-            if _is_expired_error(exc):
-                return CheckResult(status="expired", error=None)
-
-            not_after = _fetch_not_after_unverified(
-                parsed.hostname, parsed.port, self.timeout
-            )
-            if not_after is not None and not_after < datetime.now(timezone.utc):
-                return CheckResult(status="expired", error=None)
-
-            return CheckResult(
-                status="no_certificate", error=_verification_error_message(exc)
+            return _classify_verification_error(
+                exc, parsed.hostname, parsed.port, self.timeout
             )
         except ssl.SSLError as exc:
+            has_cert, _ = _probe_certificate(parsed.hostname, parsed.port, self.timeout)
+            if has_cert:
+                return CheckResult(status="invalid", error=str(exc))
             return CheckResult(status="no_certificate", error=str(exc))
         except (TimeoutError, socket.timeout):
-            return CheckResult(status="no_certificate", error="Connection timed out")
+            return CheckResult(status="unreachable", error="Connection timed out")
         except OSError as exc:
-            return CheckResult(status="no_certificate", error=str(exc))
+            return CheckResult(status="unreachable", error=str(exc))
+
+
+def _classify_verification_error(
+    exc: ssl.SSLCertVerificationError, hostname: str, port: int, timeout: float
+) -> CheckResult:
+    message = _verification_error_message(exc)
+    if _is_expired_error(exc):
+        return CheckResult(status="expired", error=message or "Certificate has expired")
+
+    has_cert, not_after = _probe_certificate(hostname, port, timeout)
+    if has_cert and not_after is not None and not_after < datetime.now(timezone.utc):
+        return CheckResult(status="expired", error=message or "Certificate has expired")
+
+    if has_cert:
+        return CheckResult(status="invalid", error=message)
+
+    return CheckResult(status="no_certificate", error=message or str(exc))
 
 
 def _is_expired_error(exc: ssl.SSLCertVerificationError) -> bool:
@@ -92,7 +105,9 @@ def _verification_error_message(exc: ssl.SSLCertVerificationError) -> str:
     return str(exc)
 
 
-def _fetch_not_after_unverified(hostname: str, port: int, timeout: float) -> datetime | None:
+def _probe_certificate(
+    hostname: str, port: int, timeout: float
+) -> tuple[bool, datetime | None]:
     context = ssl.create_default_context()
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE
@@ -102,12 +117,12 @@ def _fetch_not_after_unverified(hostname: str, port: int, timeout: float) -> dat
             with context.wrap_socket(sock, server_hostname=hostname) as ssock:
                 der = ssock.getpeercert(binary_form=True)
     except (OSError, ssl.SSLError):
-        return None
+        return False, None
 
     if not der:
-        return None
+        return False, None
 
-    return _not_after_from_der(der)
+    return True, _not_after_from_der(der)
 
 
 def _not_after_from_der(der: bytes) -> datetime | None:

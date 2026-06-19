@@ -12,10 +12,10 @@ from websitescorecard.checks.ssl import (
 )
 
 
-def test_empty_url_returns_no_certificate():
+def test_empty_url_returns_unreachable():
     check = SSLCheck(timeout=1)
     result = check.run("")
-    assert result.status == "no_certificate"
+    assert result.status == "unreachable"
     assert result.error is not None
 
 
@@ -99,23 +99,24 @@ def test_expired_certificate(mock_connect):
         result = check.run("example.com")
 
     assert result.status == "expired"
+    assert result.error == "Certificate has expired"
 
 
 @patch("websitescorecard.checks.ssl.socket.create_connection", side_effect=OSError("Connection refused"))
-def test_connection_error_returns_no_certificate(mock_connect):
+def test_connection_error_returns_unreachable(mock_connect):
     check = SSLCheck(timeout=1)
     result = check.run("bad.example")
-    assert result.status == "no_certificate"
+    assert result.status == "unreachable"
     assert "Connection refused" in (result.error or "")
 
 
-@patch("websitescorecard.checks.ssl._fetch_not_after_unverified")
+@patch("websitescorecard.checks.ssl._probe_certificate")
 @patch("websitescorecard.checks.ssl.socket.create_connection")
 def test_generic_verification_error_detects_expired_via_unverified_fetch(
-    mock_connect, mock_fetch_not_after
+    mock_connect, mock_probe
 ):
     past = datetime.now(timezone.utc) - timedelta(days=1)
-    mock_fetch_not_after.return_value = past
+    mock_probe.return_value = (True, past)
 
     mock_sock = MagicMock()
     mock_context = MagicMock()
@@ -134,16 +135,16 @@ def test_generic_verification_error_detects_expired_via_unverified_fetch(
         result = check.run("example.com")
 
     assert result.status == "expired"
-    assert result.error is None
+    assert result.error is not None
 
 
-@patch("websitescorecard.checks.ssl._fetch_not_after_unverified")
+@patch("websitescorecard.checks.ssl._probe_certificate")
 @patch("websitescorecard.checks.ssl.socket.create_connection")
 def test_verification_error_uses_verify_message_for_non_expired(
-    mock_connect, mock_fetch_not_after
+    mock_connect, mock_probe
 ):
     future = datetime.now(timezone.utc) + timedelta(days=30)
-    mock_fetch_not_after.return_value = future
+    mock_probe.return_value = (True, future)
 
     mock_sock = MagicMock()
     mock_context = MagicMock()
@@ -163,5 +164,50 @@ def test_verification_error_uses_verify_message_for_non_expired(
         check = SSLCheck(timeout=1)
         result = check.run("example.com")
 
-    assert result.status == "no_certificate"
+    assert result.status == "invalid"
     assert result.error == "Hostname mismatch, certificate is not valid for 'example.com'."
+
+
+@patch("websitescorecard.checks.ssl._probe_certificate")
+@patch("websitescorecard.checks.ssl.socket.create_connection")
+def test_ssl_error_with_cert_returns_invalid(mock_connect, mock_probe):
+    future = datetime.now(timezone.utc) + timedelta(days=30)
+    mock_probe.return_value = (True, future)
+
+    mock_sock = MagicMock()
+    mock_context = MagicMock()
+    mock_context.wrap_socket.side_effect = ssl.SSLError("bad protocol version")
+    mock_sock.__enter__ = MagicMock(return_value=mock_sock)
+    mock_sock.__exit__ = MagicMock(return_value=False)
+    mock_connect.return_value = mock_sock
+
+    with patch("websitescorecard.checks.ssl.ssl.create_default_context") as mock_ctx:
+        mock_ctx.return_value = mock_context
+
+        check = SSLCheck(timeout=1)
+        result = check.run("example.com")
+
+    assert result.status == "invalid"
+    assert "bad protocol version" in (result.error or "")
+
+
+@patch("websitescorecard.checks.ssl._probe_certificate")
+@patch("websitescorecard.checks.ssl.socket.create_connection")
+def test_ssl_error_without_cert_returns_no_certificate(mock_connect, mock_probe):
+    mock_probe.return_value = (False, None)
+
+    mock_sock = MagicMock()
+    mock_context = MagicMock()
+    mock_context.wrap_socket.side_effect = ssl.SSLError("no shared cipher")
+    mock_sock.__enter__ = MagicMock(return_value=mock_sock)
+    mock_sock.__exit__ = MagicMock(return_value=False)
+    mock_connect.return_value = mock_sock
+
+    with patch("websitescorecard.checks.ssl.ssl.create_default_context") as mock_ctx:
+        mock_ctx.return_value = mock_context
+
+        check = SSLCheck(timeout=1)
+        result = check.run("example.com")
+
+    assert result.status == "no_certificate"
+    assert "no shared cipher" in (result.error or "")
