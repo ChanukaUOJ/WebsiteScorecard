@@ -75,6 +75,7 @@ Ministry,Ministry of Digital Economy,midec.gov.lk,valid,
 | `invalid` | Cert present but fails verification (hostname mismatch, self-signed, untrusted chain, etc.) |
 | `no_certificate` | Server reached over TLS but no certificate presented |
 | `unreachable` | Could not connect to evaluate SSL (bad domain, DNS failure, timeout, connection error) |
+| `error` | Check raised an unexpected internal error (recorded in `ssl_error`) |
 
 The `ssl_error` column contains the underlying error message when something went wrong. For scorecard reporting, `expired` and `invalid` can be grouped as cert problems; `unreachable` rows can be flagged separately for CSV cleanup.
 

@@ -34,10 +34,15 @@ def _output_columns(original: list[str], checks: list[Check], include_errors: bo
 def _run_checks_for_row(url: str, checks: list[Check]) -> dict[str, str]:
     results: dict[str, str] = {}
     for check in checks:
-        result = check.run(url)
-        results[check.column] = result.status
-        if check.error_column:
-            results[check.error_column] = result.error or ""
+        try:
+            result = check.run(url)
+            results[check.column] = result.status
+            if check.error_column:
+                results[check.error_column] = result.error or ""
+        except Exception as exc:
+            results[check.column] = "error"
+            if check.error_column:
+                results[check.error_column] = f"Unexpected error: {exc}"
     return results
 
 
