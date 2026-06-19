@@ -48,7 +48,7 @@ The `URL` column contains bare domains (e.g. `defence.lk`). Full URLs such as `h
 ### 3. Run a scan
 
 ```bash
-websitescorecard scan data/mins_depts_test.csv --column URL --ssl
+websitescorecard scan data/mins_depts_test.csv --column URL --checks ssl
 ```
 
 This writes `data/mins_depts_test_scored.csv` by default (same name as input with `_scored` inserted).
@@ -56,7 +56,7 @@ This writes `data/mins_depts_test_scored.csv` by default (same name as input wit
 Specify an output file:
 
 ```bash
-websitescorecard scan data/mins_depts_test.csv -c URL -o data/mins_depts_scored.csv --ssl
+websitescorecard scan data/mins_depts_test.csv -c URL -o data/mins_depts_scored.csv --checks ssl
 ```
 
 ### 4. Check the output
@@ -90,8 +90,7 @@ websitescorecard scan INPUT_CSV -c COLUMN [OPTIONS]
 | `INPUT_CSV` | Input CSV file path |
 | `-c, --column` | Column containing website URLs (**required**) |
 | `-o, --output` | Output path (default: `{input}_scored.csv`) |
-| `--ssl` | Enable SSL certificate check |
-| `--checks` | Comma-separated checks (e.g. `ssl`) |
+| `--checks` | Comma-separated checks to run (e.g. `ssl`) (**required**) |
 | `--concurrency` | Parallel workers (default: 5) |
 | `--timeout` | Socket timeout per check in seconds (default: 10) |
 | `--no-error-columns` | Omit `*_error` detail columns |
@@ -100,16 +99,13 @@ Examples:
 
 ```bash
 # SSL check on the sample data with 10 parallel workers and 15s timeout
-websitescorecard scan data/mins_depts_test.csv -c URL --ssl --concurrency 10 --timeout 15
-
-# Same as --ssl
-websitescorecard scan data/mins_depts_test.csv -c URL --checks ssl
+websitescorecard scan data/mins_depts_test.csv -c URL --checks ssl --concurrency 10 --timeout 15
 
 # View all options
 websitescorecard scan --help
 ```
 
-At least one check must be enabled (`--ssl` or `--checks ssl`). Running with no checks prints an error.
+At least one check must be specified via `--checks`. Running with an empty value prints an error.
 
 ## Development
 
@@ -124,6 +120,6 @@ pytest
 
 1. Create `src/websitescorecard/checks/your_check.py` implementing the `Check` protocol.
 2. Register it in `src/websitescorecard/checks/__init__.py`.
-3. Add a CLI flag in `src/websitescorecard/cli.py` and include its name in `_collect_check_names`.
+3. Run it via `--checks` (comma-separated for multiple checks).
 
 See `src/websitescorecard/checks/ssl.py` for a reference implementation.

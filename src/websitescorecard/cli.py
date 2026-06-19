@@ -24,16 +24,8 @@ def _default_output_path(input_csv: Path) -> Path:
     return input_csv.with_name(f"{input_csv.stem}_scored{input_csv.suffix}")
 
 
-def _collect_check_names(
-    checks: Optional[str],
-    ssl: bool,
-) -> list[str]:
-    names: list[str] = []
-    if checks:
-        names.extend(name.strip().lower() for name in checks.split(",") if name.strip())
-    if ssl and "ssl" not in names:
-        names.append("ssl")
-    return names
+def _collect_check_names(checks: str) -> list[str]:
+    return [name.strip().lower() for name in checks.split(",") if name.strip()]
 
 
 @app.command("scan")
@@ -45,10 +37,9 @@ def scan(
         typer.Option("-o", "--output", help="Output CSV file path"),
     ] = None,
     checks: Annotated[
-        Optional[str],
+        str,
         typer.Option("--checks", help="Comma-separated list of checks to run (e.g. ssl)"),
-    ] = None,
-    ssl: Annotated[bool, typer.Option("--ssl", help="Enable SSL certificate check")] = False,
+    ] = "",
     concurrency: Annotated[
         int, typer.Option("--concurrency", help="Number of parallel workers")
     ] = 5,
@@ -65,9 +56,9 @@ def scan(
         console.print(f"[red]Error:[/red] Input file not found: {input_csv}")
         raise typer.Exit(code=1)
 
-    check_names = _collect_check_names(checks, ssl)
+    check_names = _collect_check_names(checks)
     if not check_names:
-        console.print("[red]Error:[/red] No checks specified. Use --ssl or --checks ssl.")
+        console.print("[red]Error:[/red] No checks specified. Use --checks ssl.")
         raise typer.Exit(code=1)
 
     unknown = [name for name in check_names if name not in CHECK_REGISTRY]
