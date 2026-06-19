@@ -1,0 +1,50 @@
+Type,Institution Name,URL,ssl_status,ssl_error
+Ministry,Ministry of Defence,defence.lk,valid,
+Ministry,"Ministry of Finance, Planning and Economic Development",treasury.gov.lk,valid,
+Ministry,Ministry of Digital Economy,midec.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known"
+Ministry,"Ministry of Foreign Affairs, Foreign Employment and Tourism",mfa.gov.lk,valid,
+Ministry,"Ministry of Education, Higher Education and Vocational Education",moe.gov.lk,valid,
+Ministry,"Ministry of Agriculture, Livestock, Land and Irrigation",agrimin.gov.lk,valid,
+Ministry,"Ministry of Transport, Highways and Urban Development",transport.gov.lk,valid,
+Ministry,"Ministry of Public Administration, Provincial Councils and Local Government",pubad.gov.lk,valid,
+Ministry,Ministry of Health and Mass Media,health.gov.lk,valid,
+Ministry,Ministry of Justice and National Integration,moj.gov.lk,valid,
+Ministry,Ministry of Public Security and Parliamentary Affairs,pubsec.gov.lk,valid,
+Ministry,Ministry of Industry and Entrepreneurship Development,industry.gov.lk,valid,
+Ministry,"Ministry of Trade, Commerce, Food Security and Cooperative Development",ment.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known"
+Ministry,Ministry of Environment,env.gov.lk,valid,
+Ministry,Ministry of Energy,energy.gov.lk,valid,
+Ministry,"Ministry of Housing, Construction and Water Supply",housingmin.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known"
+Ministry,Ministry of Labor,labourmin.gov.lk,valid,
+Ministry,Ministry of Plantation and Community Infrastructure,plantationindustries.gov.lk,invalid,"Hostname mismatch, certificate is not valid for 'plantationindustries.gov.lk'."
+Ministry,Ministry of Ports and Civil Aviation,portaviation.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known"
+Ministry,"Ministry of Fisheries, Aquatic and Ocean Resources",fisheries.gov.lk,valid,
+Ministry,Ministry of Women and Child Affairs,childwomen.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known"
+Ministry,"Ministry of Rural Development, Social Security and Community Empowerment",socialservices.gov.lk,valid,
+Ministry,"Ministry of Buddhasasana, Religious and Cultural Affairs",mbra.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known"
+Ministry,Ministry of Youth Affairs and Sports,sportsmin.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known"
+Ministry,Ministry of Science and Technology,most.gov.lk,valid,
+Department,Department of Immigration and Emigration,immigration.gov.lk,valid,
+Department,Department of Motor Traffic,dmt.gov.lk,valid,
+Department,Department of Registration of Persons,drp.gov.lk,valid,
+Department,Department of Registrar General,rgd.gov.lk,valid,
+Department,Department of Inland Revenue,ird.gov.lk,valid,
+Department,Sri Lanka Customs,customs.gov.lk,valid,
+Department,Department of Pensions,pensions.gov.lk,valid,
+Department,Department of Census and Statistics,statistics.gov.lk,unreachable,[Errno 54] Connection reset by peer
+Department,Department of Government Information,dgi.gov.lk,valid,
+Department,Department of Government Printing,documents.gov.lk,valid,
+Department,Department of Excise,excise.gov.lk,valid,
+Department,Department of National Budget,nationalbudget.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known"
+Department,Department of Meteorology,meteo.gov.lk,valid,
+Department,Department of Wildlife Conservation,dwc.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known"
+Department,Department of Forest Conservation,forestdept.gov.lk,expired,unable to get local issuer certificate
+Department,Department of National Zoological Gardens,colombozoo.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known"
+Department,Department of Examinations,doenets.lk,valid,
+Department,Department of Archaeology,archaeology.gov.lk,valid,
+Department,Department of Samurdhi,samurdhi.gov.lk,valid,
+Department,LSF,opensource.lk,invalid,"Hostname mismatch, certificate is not valid for 'opensource.lk'."
+Expired,Expired SSL,expired.badssl.com,unreachable,[Errno 54] Connection reset by peer
+Self-Signed,Self-Signed SSL,self-signed.badssl.com,invalid,self-signed certificate
+Wrong Host,Wrong Host SSL,wrong.host.badssl.com,invalid,"Hostname mismatch, certificate is not valid for 'wrong.host.badssl.com'."
+Never SSL,Never SSL,neverssl.com,valid,
