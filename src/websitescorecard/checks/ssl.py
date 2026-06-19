@@ -46,9 +46,8 @@ class SSLCheck:
                             status="no_certificate", error="Certificate missing notAfter"
                         )
 
-                    not_after = datetime.strptime(
-                        not_after_str, "%b %d %H:%M:%S %Y %Z"
-                    ).replace(tzinfo=timezone.utc)
+                    timestamp = ssl.cert_time_to_seconds(not_after_str)
+                    not_after = datetime.fromtimestamp(timestamp, tz=timezone.utc)
                     now = datetime.now(timezone.utc)
 
                     if not_after < now:

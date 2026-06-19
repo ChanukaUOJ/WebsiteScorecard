@@ -26,5 +26,8 @@ def parse_url(url: str, default_port: int = 443) -> ParsedUrl:
     if not hostname:
         raise ValueError(f"invalid URL: {url!r}")
 
-    port = parsed.port if parsed.port is not None else default_port
+    port = parsed.port
+    if port is None:
+        scheme = parsed.scheme.lower()
+        port = 80 if scheme == "http" else default_port
     return ParsedUrl(hostname=hostname, port=port)

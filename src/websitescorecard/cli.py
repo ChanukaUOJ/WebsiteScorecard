@@ -30,7 +30,7 @@ def _collect_check_names(
 ) -> list[str]:
     names: list[str] = []
     if checks:
-        names.extend(name.strip() for name in checks.split(",") if name.strip())
+        names.extend(name.strip().lower() for name in checks.split(",") if name.strip())
     if ssl and "ssl" not in names:
         names.append("ssl")
     return names

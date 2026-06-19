@@ -17,6 +17,12 @@ def test_https_url_with_path():
     assert parsed.port == 443
 
 
+def test_http_url_defaults_to_port_80():
+    parsed = parse_url("http://bar.com/api")
+    assert parsed.hostname == "bar.com"
+    assert parsed.port == 80
+
+
 def test_http_url_with_explicit_port():
     parsed = parse_url("http://bar.com:8080/api")
     assert parsed.hostname == "bar.com"
