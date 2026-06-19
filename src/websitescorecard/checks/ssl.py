@@ -128,13 +128,15 @@ def _probe_certificate(
 def _not_after_from_der(der: bytes) -> datetime | None:
     times: list[datetime] = []
     i = 0
-    while i < len(der):
+    while i < len(der) - 1:
         tag = der[i]
         if tag in (0x17, 0x18):
             length = der[i + 1]
             if length >= 0x80:
                 i += 1
                 continue
+            if i + 2 + length > len(der):
+                break
             raw = der[i + 2 : i + 2 + length].decode("ascii", errors="ignore")
             try:
                 if tag == 0x17 and raw.endswith("Z") and len(raw) == 13:
@@ -147,6 +149,8 @@ def _not_after_from_der(der: bytes) -> datetime | None:
                     )
             except ValueError:
                 pass
-        i += 1
+            i += 2 + length
+        else:
+            i += 1
 
     return times[-1] if times else None

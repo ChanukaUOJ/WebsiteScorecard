@@ -48,6 +48,20 @@ def test_not_after_from_der_parses_utc_time():
     assert not_after == datetime(2015, 4, 12, 23, 59, 59, tzinfo=timezone.utc)
 
 
+def test_not_after_from_der_handles_truncated_buffer():
+    assert _not_after_from_der(b"\x17") is None
+    assert _not_after_from_der(b"\x17\x0D") is None
+    assert _not_after_from_der(b"\x17\x0Dshort") is None
+
+
+def test_not_after_from_der_returns_last_time():
+    first = bytes([0x17, 0x0D]) + b"150412235959Z"
+    second = bytes([0x18, 0x0F]) + b"20301231235959Z"
+    der = first + b"\x00" * 4 + second
+    not_after = _not_after_from_der(der)
+    assert not_after == datetime(2030, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
+
+
 @patch("websitescorecard.checks.ssl.socket.create_connection")
 def test_valid_certificate(mock_connect):
     future = datetime.now(timezone.utc) + timedelta(days=30)
