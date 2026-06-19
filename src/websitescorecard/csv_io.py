@@ -8,7 +8,7 @@ from pathlib import Path
 
 def read_csv(path: Path) -> tuple[list[str], list[dict[str, str]]]:
     """Read a CSV file, returning column order and row dicts."""
-    with path.open(newline="", encoding="utf-8") as f:
+    with path.open(newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         if reader.fieldnames is None:
             raise ValueError(f"CSV file has no header row: {path}")
