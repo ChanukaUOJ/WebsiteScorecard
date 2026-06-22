@@ -1,6 +1,6 @@
 # WebsiteScorecard
 
-CLI to scan websites from a CSV and enrich rows with check results (SSL certificate status, and more over time).
+CLI to scan websites from a CSV and enrich rows with check results (SSL certificate status, trilingual and more over time).
 
 ## Prerequisites
 
@@ -48,7 +48,7 @@ The `URL` column contains bare domains (e.g. `defence.lk`). Full URLs such as `h
 ### 3. Run a scan
 
 ```bash
-websitescorecard scan data/mins_depts_test.csv --column URL --checks ssl
+websitescorecard scan data/mins_depts_test.csv --column URL --checks ssl,trilingual
 ```
 
 This writes `data/mins_depts_test_scored.csv` by default (same name as input with `_scored` inserted).
@@ -56,15 +56,15 @@ This writes `data/mins_depts_test_scored.csv` by default (same name as input wit
 Specify an output file:
 
 ```bash
-websitescorecard scan data/mins_depts_test.csv -c URL -o data/mins_depts_scored.csv --checks ssl
+websitescorecard scan data/mins_depts_test.csv -c URL -o data/mins_depts_scored.csv --checks ssl,trilingual
 ```
 
 ### 4. Check the output
 
 ```csv
-Type,Institution Name,URL,ssl_status,ssl_error
-Ministry,Ministry of Defence,defence.lk,valid,
-Ministry,Ministry of Digital Economy,midec.gov.lk,valid,
+Type,Institution Name,URL,ssl_status,ssl_error,trilingual_status,trilingual_error
+Ministry,Ministry of Defence,defence.lk,valid,,trilingual,
+Ministry,Ministry of Digital Economy,midec.gov.lk,valid,,trilingual,
 ...
 ```
 
@@ -79,6 +79,13 @@ Ministry,Ministry of Digital Economy,midec.gov.lk,valid,
 
 The `ssl_error` column contains the underlying error message when something went wrong. For scorecard reporting, `expired` and `invalid` can be grouped as cert problems; `unreachable` rows can be flagged separately for CSV cleanup.
 
+| `trilingual_status` | Meaning |
+|-------------------|---------|
+| `trilingual` | Page contains all 3 official languages (Sinhala, Tamil, English) |
+| `Non-trilingual` | Page is missing one or more official languages |
+| `unreachable` | Could not connect to evaluate trilingual status (bad domain, DNS failure, timeout, connection error) |
+| `error` | Check raised an unexpected internal error (recorded in `trilingual_error`) |
+
 ## CLI reference
 
 ```bash
@@ -90,7 +97,7 @@ websitescorecard scan INPUT_CSV -c COLUMN [OPTIONS]
 | `INPUT_CSV` | Input CSV file path |
 | `-c, --column` | Column containing website URLs (**required**) |
 | `-o, --output` | Output path (default: `{input}_scored.csv`) |
-| `--checks` | Comma-separated checks to run (e.g. `ssl`) (**required**) |
+| `--checks` | Comma-separated checks to run (e.g. `ssl,trilingual`) (**required**) |
 | `--concurrency` | Parallel workers (default: 5) |
 | `--timeout` | Socket timeout per check in seconds (default: 10) |
 | `--no-error-columns` | Omit `*_error` detail columns |
@@ -98,8 +105,8 @@ websitescorecard scan INPUT_CSV -c COLUMN [OPTIONS]
 Examples:
 
 ```bash
-# SSL check on the sample data with 10 parallel workers and 15s timeout
-websitescorecard scan data/mins_depts_test.csv -c URL --checks ssl --concurrency 10 --timeout 15
+# SSL and trilingual checks on the sample data with 10 parallel workers and 15s timeout
+websitescorecard scan data/mins_depts_test.csv -c URL --checks ssl,trilingual --concurrency 10 --timeout 15
 
 # View all options
 websitescorecard scan --help

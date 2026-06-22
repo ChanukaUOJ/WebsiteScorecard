@@ -6,11 +6,13 @@ from typing import Callable
 
 from websitescorecard.checks.base import Check
 from websitescorecard.checks.ssl import SSLCheck
+from websitescorecard.checks.trilingual import TrilingualCheck
 
 CheckFactory = Callable[[], Check]
 
 CHECK_REGISTRY: dict[str, CheckFactory] = {
     "ssl": SSLCheck,
+    "trilingual": TrilingualCheck
 }
 
 
