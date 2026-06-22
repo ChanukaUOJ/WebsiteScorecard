@@ -1,3 +1,5 @@
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+import threading
 import re
 import requests
 import urllib3
@@ -7,6 +9,15 @@ from bs4 import BeautifulSoup
 
 LANGUAGE_KEY = ['en','si','ta']
 
+# each entry is values to detect and inject, order should be preserved
+LANG_STORAGE_FORMATS: list[tuple[list[str], list[str]]] = [
+    (['en', 'si', 'ta'],                                    ['en', 'si', 'ta']),
+    (['en-US', 'en-GB', 'si-LK', 'ta-LK', 'ta-IN'],        ['en-US', 'si-LK', 'ta-LK']),
+    (['en-us', 'en-gb', 'si-lk', 'ta-lk', 'ta-in'],        ['en-us', 'si-lk', 'ta-lk']),
+    (['English', 'Sinhala', 'Tamil'],                       ['English', 'Sinhala', 'Tamil']),
+    (['english', 'sinhala', 'tamil'],                       ['english', 'sinhala', 'tamil']),
+]
+
 # html key and tags
 HTML_KEY_HREFLANG = 'hreflang'
 HTML_KEY_LINK = 'link'
@@ -15,6 +26,7 @@ HTML_GOOGLE_TRANSLATE_ELEMENT = 'google_translate_element'
 HTML_GOOG_TE_COMBO = 'goog-te-combo'
 HTML_GOOGLE_TRANSLATE_ELEMENT_JS = 'translate.google.com/translate_a/element.js'
 
+_playwright_lock = threading.Lock()
 
 class TrilingualCheck:
     name = "trilingual"
@@ -99,6 +111,85 @@ class TrilingualCheck:
         missing = [lang for lang in LANGUAGE_KEY if lang not in found_langs]
         return (len(missing) == 0, missing)
 
+    def check_browser_storage_keys(self, url) -> tuple[bool, list[str]]:
+        try:
+            with _playwright_lock:
+                with sync_playwright() as p:
+                    browser = p.chromium.launch()
+                    page = browser.new_page()
+                    try:
+                        # Wait for the load event, then give JavaScript 3 seconds to build the DOM.
+                        page.goto(url, wait_until="load", timeout=self.timeout * 1000)
+                        page.wait_for_timeout(3000)
+                    except PlaywrightTimeoutError:
+                        pass
+            
+                    # Extract localStorage directly
+                    storage = page.evaluate("""()=>{
+                        const s = [];
+                        for (let i = 0; i < localStorage.length; i++) {
+                            s.push({
+                                key: localStorage.key(i),
+                                value: localStorage.getItem(localStorage.key(i))
+                            });
+                        }
+                        return s;
+                    }""")
+                    
+                    # Search for any key that holds a language value and detect its format
+                    target_key = None
+                    injection_set = []
+                    
+                    for item in storage:
+                        val = str(item.get('value', ''))
+                        for detect_vals, inject_vals in LANG_STORAGE_FORMATS:
+                            if val in detect_vals:
+                                target_key = item.get('key')
+                                injection_set = inject_vals
+                                break
+                        if target_key:
+                            break
+                            
+                    if target_key:
+                        # Inject all 3 values and verify unicode
+                        missing_injection = []
+                        langs = LANGUAGE_KEY
+                        
+                        for i in range(3):
+                            base_lang = langs[i]
+                            inject_val = injection_set[i]
+                            
+                            page.evaluate(f"window.localStorage.setItem('{target_key}', '{inject_val}')")
+                            try:
+                                page.reload(wait_until="load", timeout=self.timeout * 1000)
+                                page.wait_for_timeout(3000)
+                            except PlaywrightTimeoutError:
+                                pass
+                                
+                            current_html = page.content()
+                            current_soup = BeautifulSoup(current_html, 'html.parser')
+                            _, missing_unicode = self.check_unicode_content(current_soup)
+                            
+                            if base_lang in missing_unicode:
+                                missing_injection.append(base_lang)
+                                
+                        if len(missing_injection) == 0:
+                            browser.close()
+                            return (True, [])
+
+                    html = page.content()
+                    browser.close()
+
+            soup = BeautifulSoup(html, 'html.parser')
+            _, missing_url_localization = self.check_url_localization_patterns(soup)
+            _, missing_unicode = self.check_unicode_content(soup)
+
+            missing_set = set(missing_url_localization) & set(missing_unicode)
+            missing = list(missing_set)
+            return (len(missing) == 0, missing)
+        except Exception:
+            return (False, list(LANGUAGE_KEY))
+    
     def run(self, url: str) -> CheckResult:
         try:
             parsed = parse_url(url)
@@ -140,6 +231,12 @@ class TrilingualCheck:
 
             # If no languages are missing (combined), or it uses Google Translate, it passes!
             if len(missing_set) == 0 or passed_google_translator_use:
+                return CheckResult(status="trilingual", error=None)
+
+            website_lang, missing_browser = self.check_browser_storage_keys(response.url)
+            missing_set = missing_set & set(missing_browser)
+
+            if len(missing_set) == 0:
                 return CheckResult(status="trilingual", error=None)
             else:
                 return CheckResult(status="Non-trilingual", error=f"missing languages: {', '.join(sorted(missing_set))}")
