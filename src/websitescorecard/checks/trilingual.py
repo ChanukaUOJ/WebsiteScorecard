@@ -27,7 +27,6 @@ HTML_GOOG_TE_COMBO = 'goog-te-combo'
 HTML_GOOGLE_TRANSLATE_ELEMENT_JS = 'translate.google.com/translate_a/element.js'
 
 _playwright_lock = threading.Lock()
-
 class TrilingualCheck:
     name = "trilingual"
     column = "trilingual_status"
@@ -159,7 +158,7 @@ class TrilingualCheck:
                             base_lang = langs[i]
                             inject_val = injection_set[i]
                             
-                            page.evaluate(f"window.localStorage.setItem('{target_key}', '{inject_val}')")
+                            page.evaluate("([key, val]) => window.localStorage.setItem(key, val)", [target_key, inject_val])
                             try:
                                 page.reload(wait_until="load", timeout=self.timeout * 1000)
                                 page.wait_for_timeout(3000)
@@ -175,7 +174,7 @@ class TrilingualCheck:
                                 
                         if len(missing_injection) == 0:
                             browser.close()
-                            return (True, [])
+                            return (len(missing_injection) == 0, missing_injection)
 
                     html = page.content()
                     browser.close()
