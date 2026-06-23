@@ -3,19 +3,22 @@ import threading
 import re
 import requests
 import urllib3
+from urllib.parse import urljoin, urlparse
 from websitescorecard.url_utils import parse_url
 from websitescorecard.checks.base import CheckResult
 from bs4 import BeautifulSoup
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 LANGUAGE_KEY = ['en','si','ta']
 
 # each entry is values to detect and inject, order should be preserved
 LANG_STORAGE_FORMATS: list[tuple[list[str], list[str]]] = [
-    (['en', 'si', 'ta'],                                    ['en', 'si', 'ta']),
-    (['en-US', 'en-GB', 'si-LK', 'ta-LK', 'ta-IN'],        ['en-US', 'si-LK', 'ta-LK']),
-    (['en-us', 'en-gb', 'si-lk', 'ta-lk', 'ta-in'],        ['en-us', 'si-lk', 'ta-lk']),
-    (['English', 'Sinhala', 'Tamil'],                       ['English', 'Sinhala', 'Tamil']),
-    (['english', 'sinhala', 'tamil'],                       ['english', 'sinhala', 'tamil']),
+    (['en', 'si', 'ta'],                            ['en', 'si', 'ta']),
+    (['en-US', 'en-GB', 'si-LK', 'ta-LK', 'ta-IN'], ['en-US', 'si-LK', 'ta-LK']),
+    (['en-us', 'en-gb', 'si-lk', 'ta-lk', 'ta-in'], ['en-us', 'si-lk', 'ta-lk']),
+    (['English', 'Sinhala', 'Tamil'],               ['English', 'Sinhala', 'Tamil']),
+    (['english', 'sinhala', 'tamil'],               ['english', 'sinhala', 'tamil']),
 ]
 
 # html key and tags
@@ -26,11 +29,15 @@ HTML_GOOGLE_TRANSLATE_ELEMENT = 'google_translate_element'
 HTML_GOOG_TE_COMBO = 'goog-te-combo'
 HTML_GOOGLE_TRANSLATE_ELEMENT_JS = 'translate.google.com/translate_a/element.js'
 
+DEEPLINK_COUNT = 5
+
 _playwright_lock = threading.Lock()
+
 class TrilingualCheck:
     name = "trilingual"
     column = "trilingual_status"
     error_column = "trilingual_error"
+    details_column = "trilingual_details"
 
     def __init__(self, timeout: float = 10.0) -> None:
         self.timeout = timeout
@@ -95,22 +102,101 @@ class TrilingualCheck:
         text = soup.get_text()
         found_langs: set[str] = set()
         
-        # Check English (basic Latin alphabet)
-        if re.search(r'[a-zA-Z]', text):
+        # Check English (basic Latin alphabet) - look for at least 10 alpha characters
+        if re.search(r'(?:[a-zA-Z].*?){50}', text):
             found_langs.add('en')
             
-        # Check Sinhala unicode block
-        if re.search(r'[\u0D80-\u0DFF]', text):
+        # Check Sinhala unicode block - look for at least 10 Sinhala characters
+        if re.search(r'(?:[\u0D80-\u0DFF].*?){50}', text):
             found_langs.add('si')
             
-        # Check Tamil unicode block
-        if re.search(r'[\u0B80-\u0BFF]', text):
+        # Check Tamil unicode block - look for at least 10 Tamil characters
+        if re.search(r'(?:[\u0B80-\u0BFF].*?){50}', text):
             found_langs.add('ta')
             
         missing = [lang for lang in LANGUAGE_KEY if lang not in found_langs]
         return (len(missing) == 0, missing)
 
-    def check_browser_storage_keys(self, url) -> tuple[bool, list[str]]:
+    def verify_language_buttons_via_browser(self, url: str, langs_to_check: list[str]) -> list[str]:
+        # Returns the list of languages STILL missing after verification
+        missing = list(langs_to_check)
+        found_langs: set[str] = set()
+        try:
+            with _playwright_lock:
+                with sync_playwright() as p:
+                    browser = p.chromium.launch()
+                    
+                    targets = {}
+                    if 'si' in langs_to_check:
+                        targets['si'] = r'\bsinhala\b|සිංහල|^si$'
+                    if 'ta' in langs_to_check:
+                        targets['ta'] = r'\btamil\b|தமிழ்|^ta$'
+                        
+                    for lang, pattern in targets.items():
+                        # Use a fresh context (and page) per language to avoid navigation bleed-over
+                        context = browser.new_context()
+                        page = context.new_page()
+                        try:
+                            page.goto(url, wait_until="load", timeout=30000)
+                            page.wait_for_timeout(2000)
+                        except PlaywrightTimeoutError:
+                            context.close()
+                            continue
+                            
+                        # Try to find a clickable element matching the pattern
+                        try:
+                            element_handle = page.evaluate_handle(f"""() => {{
+                                const regex = /{pattern}/i;
+                                const elements = Array.from(document.querySelectorAll('a, button, input[type="submit"], input[type="button"]'));
+                                for (let el of elements) {{
+                                    if (el.innerText && regex.test(el.innerText)) return el;
+                                    if (el.value && regex.test(el.value)) return el;
+                                }}
+                                return null;
+                            }}""")
+                        except Exception:
+                            context.close()
+                            continue
+                        
+                        if element_handle.as_element():
+                            # Click the element
+                            try:
+                                element_handle.as_element().click(timeout=5000)
+                            except Exception:
+                                pass
+                            
+                            # Always wait for load state to be stable before reading content
+                            try:
+                                page.wait_for_load_state("load", timeout=12000)
+                            except Exception:
+                                pass
+                            page.wait_for_timeout(1000)
+                                    
+                            # Safely extract the HTML
+                            try:
+                                html = page.content()
+                            except Exception:
+                                page.wait_for_timeout(3000)
+                                try:
+                                    html = page.content()
+                                except Exception:
+                                    context.close()
+                                    continue
+                                    
+                            soup = BeautifulSoup(html, 'html.parser')
+                            _, missing_uni = self.check_unicode_content(soup)
+                            if lang not in missing_uni:
+                                found_langs.add(lang)
+                                
+                        context.close()
+                    
+                    browser.close()
+            return [lang for lang in langs_to_check if lang not in found_langs]
+        except Exception:
+            return missing
+
+
+    def check_browser_storage_keys(self, url) -> tuple[bool, list[str], str]:
         try:
             with _playwright_lock:
                 with sync_playwright() as p:
@@ -174,21 +260,79 @@ class TrilingualCheck:
                                 
                         if len(missing_injection) == 0:
                             browser.close()
-                            return (len(missing_injection) == 0, missing_injection)
+                            return (True, missing_injection, "browser_storage")
 
                     html = page.content()
                     browser.close()
 
             soup = BeautifulSoup(html, 'html.parser')
-            _, missing_url_localization = self.check_url_localization_patterns(soup)
-            _, missing_unicode = self.check_unicode_content(soup)
+            passed_url_loc, missing_url_localization = self.check_url_localization_patterns(soup)
+            passed_uni, missing_unicode = self.check_unicode_content(soup)
 
             missing_set = set(missing_url_localization) & set(missing_unicode)
             missing = list(missing_set)
-            return (len(missing) == 0, missing)
+            passed_criteria: list[str] = []
+            if passed_url_loc:
+                passed_criteria.append("url_localization")
+            if passed_uni:
+                passed_criteria.append("unicode_content")
+            criteria_str = ", ".join(passed_criteria) if passed_criteria else "js_rendered"
+            return (len(missing) == 0, missing, f"{criteria_str}")
         except Exception:
             return (False, list(LANGUAGE_KEY))
     
+    def _analyze_soup(self, soup: BeautifulSoup) -> tuple[set[str], bool, list[str]]:
+        passed_attribute, missing_attribute = self.check_html_attribute(soup)
+        passed_google = self.check_google_translate(soup)
+        passed_url_loc, missing_url_loc = self.check_url_localization_patterns(soup)
+        # passed_uni, missing_uni = self.check_unicode_content(soup)
+
+        missing_set = set(missing_attribute) & set(missing_url_loc) 
+        # & set(missing_uni)
+        found_langs = set(LANGUAGE_KEY) - missing_set
+        
+        passed_criteria: list[str] = []
+        if passed_attribute:
+            passed_criteria.append("html_attribute")
+        if passed_url_loc:
+            passed_criteria.append("url_localization")
+        # if passed_uni:
+        #     passed_criteria.append("unicode_content")
+            
+        return found_langs, passed_google, passed_criteria
+
+    def _get_internal_links(self, base_url: str, soup: BeautifulSoup) -> list[str]:
+        lang_links = set()
+        other_links = set()
+        try:
+            base_domain = urlparse(base_url).netloc
+            for a in soup.find_all('a', href=True):
+                href = a.get('href', '').strip()
+                text = a.get_text().strip().lower()
+                if not href or href.startswith(('mailto:', 'tel:', 'javascript:', '#')):
+                    continue
+                
+                absolute_url = urljoin(base_url, href)
+                parsed_url = urlparse(absolute_url)
+                
+                if parsed_url.netloc != base_domain:
+                    continue
+                    
+                if parsed_url.path.lower().endswith(('.pdf', '.jpg', '.jpeg', '.png', '.zip', '.doc', '.docx', '.xls', '.xlsx')):
+                    continue
+                    
+                clean_url = absolute_url.split('#')[0]
+                
+                href_lower = href.lower()
+                if any(x in href_lower for x in ['/si', '/ta', '=si', '=ta', 'sinhala', 'tamil']) or \
+                   any(x in text for x in ['sinhala', 'tamil', 'සිංහල', 'தமிழ்']):
+                    lang_links.add(clean_url)
+                else:
+                    other_links.add(clean_url)
+        except Exception:
+            pass
+        return list(lang_links) + list(other_links)
+
     def run(self, url: str) -> CheckResult:
         try:
             parsed = parse_url(url)
@@ -207,38 +351,60 @@ class TrilingualCheck:
                 
             # Fallback to https://www if needed
             if needs_fallback:
-                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
                 response = requests.get(f'https://www.{parsed.hostname}', timeout=self.timeout, headers=headers, verify=False)
                 
             html = response.text
             soup = BeautifulSoup(html, 'html.parser')
 
-            # HTML lang attribute and header check
-            passed_attribute, missing_attribute = self.check_html_attribute(soup)
+            found_langs, passed_google, passed_criteria = self._analyze_soup(soup)
 
-            # check google translator use
-            passed_google_translator_use = self.check_google_translate(soup)
+            if passed_google:
+                return CheckResult(status="trilingual", error=None, details="google_translate")
 
-            # URL Localization patterns
-            passed_url_localization, missing_url_localization = self.check_url_localization_patterns(soup)
+            if len(found_langs) == 3:
+                return CheckResult(status="trilingual", error=None, details=", ".join(passed_criteria) or "static_checks")
 
-            # Direct body text contents (Unicode)
-            passed_unicode, missing_unicode = self.check_unicode_content(soup)
+            # Try deeplink crawling
+            internal_links = self._get_internal_links(response.url, soup)
+            # Filter out the homepage itself
+            internal_links = [l for l in internal_links if l != response.url and l != response.url.rstrip('/')]
+            
+            sample_links = internal_links[:DEEPLINK_COUNT] # The first links are prioritized language links
 
-            # Languages missing from ALL checks are truly missing
-            missing_set = set(missing_attribute) & set(missing_url_localization) & set(missing_unicode)
+            for link in sample_links:
+                try:
+                    dl_response = requests.get(link, timeout=self.timeout, headers=headers, verify=False)
+                    dl_soup = BeautifulSoup(dl_response.text, 'html.parser')
+                    dl_found, dl_google, dl_criteria = self._analyze_soup(dl_soup)
+                    
+                    if dl_google:
+                        return CheckResult(status="trilingual", error=None, details="deeplink_crawl: google_translate")
+                    
+                    found_langs.update(dl_found)
+                    passed_criteria.extend(dl_criteria)
+                    
+                    if len(found_langs) == 3:
+                        unique_criteria = sorted(list(set(passed_criteria)))
+                        return CheckResult(status="trilingual", error=None, details=f"deeplink_crawl: {', '.join(unique_criteria)}")
+                except Exception:
+                    continue
 
-            # If no languages are missing (combined), or it uses Google Translate, it passes!
-            if len(missing_set) == 0 or passed_google_translator_use:
-                return CheckResult(status="trilingual", error=None)
-
-            website_lang, missing_browser = self.check_browser_storage_keys(response.url)
+            # Fallback to Playwright on homepage
+            website_lang, missing_browser, browser_method = self.check_browser_storage_keys(response.url)
+            missing_set = set(LANGUAGE_KEY) - found_langs
             missing_set = missing_set & set(missing_browser)
 
             if len(missing_set) == 0:
-                return CheckResult(status="trilingual", error=None)
+                return CheckResult(status="trilingual", error=None, details=browser_method)
+                
+            # Final Fallback: Functional Verification via click
+            missing_click = self.verify_language_buttons_via_browser(response.url, list(missing_set))
+            missing_set = missing_set & set(missing_click)
+
+            if len(missing_set) == 0:
+                return CheckResult(status="trilingual", error=None, details="verified_switcher_click")
             else:
-                return CheckResult(status="Non-trilingual", error=f"missing languages: {', '.join(sorted(missing_set))}")
+                return CheckResult(status="Non-trilingual", error=f"missing languages: {', '.join(sorted(missing_set))}", details="non_trilingual")
 
         except Exception as exc:
             return CheckResult(status="unreachable", error="Can't Access")
