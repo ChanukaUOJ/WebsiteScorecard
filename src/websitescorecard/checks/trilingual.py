@@ -29,10 +29,7 @@ HTML_GOOGLE_TRANSLATE_ELEMENT = 'google_translate_element'
 HTML_GOOG_TE_COMBO = 'goog-te-combo'
 HTML_GOOGLE_TRANSLATE_ELEMENT_JS = 'translate.google.com/translate_a/element.js'
 
-DEEPLINK_COUNT = 5
-
 _playwright_lock = threading.Lock()
-
 class TrilingualCheck:
     name = "trilingual"
     column = "trilingual_status"
@@ -99,21 +96,26 @@ class TrilingualCheck:
         return (len(missing) == 0, missing)
 
     def check_unicode_content(self, soup: BeautifulSoup) -> tuple[bool, list[str]]:
-        text = soup.get_text()
+        # Remove noise tags entirely
+        for tag in soup.find_all(['script', 'style', 'head', 'meta', 'noscript', 'nav', 'footer']):
+            tag.decompose()
+
+        # Extract text only from meaningful content tags
+        content_tags = soup.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'td', 'th', 'span', 'div', 'article', 'section', 'main'])
+        text = ' '.join(tag.get_text(separator=' ', strip=True) for tag in content_tags)
+
         found_langs: set[str] = set()
-        
-        # Check English (basic Latin alphabet) - look for at least 10 alpha characters
-        if re.search(r'(?:[a-zA-Z].*?){50}', text):
+        MIN_CHARS = 50
+
+        if len(re.findall(r'[a-zA-Z]', text)) >= MIN_CHARS:
             found_langs.add('en')
-            
-        # Check Sinhala unicode block - look for at least 10 Sinhala characters
-        if re.search(r'(?:[\u0D80-\u0DFF].*?){50}', text):
+
+        if len(re.findall(r'[\u0D80-\u0DFF]', text)) >= MIN_CHARS:
             found_langs.add('si')
-            
-        # Check Tamil unicode block - look for at least 10 Tamil characters
-        if re.search(r'(?:[\u0B80-\u0BFF].*?){50}', text):
+
+        if len(re.findall(r'[\u0B80-\u0BFF]', text)) >= MIN_CHARS:
             found_langs.add('ta')
-            
+
         missing = [lang for lang in LANGUAGE_KEY if lang not in found_langs]
         return (len(missing) == 0, missing)
 
@@ -208,7 +210,7 @@ class TrilingualCheck:
                         page.wait_for_timeout(3000)
                     except PlaywrightTimeoutError:
                         pass
-            
+
                     # Extract localStorage directly
                     storage = page.evaluate("""()=>{
                         const s = [];
@@ -369,7 +371,7 @@ class TrilingualCheck:
             # Filter out the homepage itself
             internal_links = [l for l in internal_links if l != response.url and l != response.url.rstrip('/')]
             
-            sample_links = internal_links[:DEEPLINK_COUNT] # The first links are prioritized language links
+            sample_links = internal_links[:5] # The first links are prioritized language links
 
             for link in sample_links:
                 try:
