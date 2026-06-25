@@ -88,8 +88,8 @@ def test_url_localization_false_positive(checker):
 
 # 3. Unicode Content Detection
 def test_unicode_content_detection(checker):
-    # Needs >= 150 English chars
-    en_text = "a" * 150
+    # Needs >= 50 English chars
+    en_text = "a" * 50
     # Needs >= 50 Sinhala chars
     si_text = "\u0D80" * 50
     # Needs >= 50 Tamil chars
@@ -122,7 +122,7 @@ def test_unicode_content_noise_ignore(checker):
 # 4. Analyze Soup Forgiveness Logic
 def test_analyze_soup_forgiveness(checker):
     # English page text
-    en_text = "a" * 150
+    en_text = "a" * 50
     # Links to si and ta, missing en
     html = f"""
     <div>
@@ -138,7 +138,7 @@ def test_analyze_soup_forgiveness(checker):
 
 def test_analyze_soup_mixed_content_no_forgiveness(checker):
     # Page text has en, si, and ta, but NO switchers
-    en_text = "a" * 150
+    en_text = "a" * 50
     si_text = "\u0D80" * 50
     ta_text = "\u0B80" * 50
     html = f"""
@@ -213,7 +213,7 @@ def test_browser_storage_keys_pass(mock_playwright, checker):
     ]
     
     # Return html containing unicode characters for each injection reload
-    en_html = f"<html><p>{'a'*150}</p></html>"
+    en_html = f"<html><p>{'a'*50}</p></html>"
     si_html = f"<html><p>{chr(0x0D80)*50}</p></html>"
     ta_html = f"<html><p>{chr(0x0B80)*50}</p></html>"
     

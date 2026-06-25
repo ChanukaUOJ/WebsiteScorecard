@@ -221,7 +221,7 @@ class TrilingualCheck:
         found_langs: set[str] = set()
         MIN_CHARS = 50
 
-        if len(re.findall(r'[a-zA-Z]', text)) >= 150:
+        if len(re.findall(r'[a-zA-Z]', text)) >= MIN_CHARS:
             found_langs.add('en')
 
         if len(re.findall(r'[\u0D80-\u0DFF]', text)) >= MIN_CHARS:
@@ -576,10 +576,24 @@ class TrilingualCheck:
             missing_click = self._verify_language_buttons_via_browser(response.url, list(missing_set))
             missing_set = missing_set & set(missing_click)
 
+            # Forgiveness: If we verified 2 languages, and the only missing one is the language we are already reading, it's trilingual.
+            passed_uni, missing_uni = self._check_unicode_content(soup)
+            current_page_langs = set(LANGUAGE_KEY) - set(missing_uni)
+            
+            if len(missing_set) == 1:
+                missing_1 = list(missing_set)[0]
+                if missing_1 in current_page_langs:
+                    missing_set.remove(missing_1)
+
             if len(missing_set) == 0:
                 return TrilingualCheckResult(status="trilingual", error=None, details="verified_switcher_click")
             else:
-                return TrilingualCheckResult(status="Non-trilingual", error=f"missing languages: {', '.join(sorted(missing_set))}")
+                # Make the error message more intuitive by not claiming the page's native language is 'missing'.
+                # However, if it's a mixed-content page that lacks all switchers, we still report all switchers as missing.
+                display_missing = missing_set - current_page_langs
+                if len(display_missing) == 0:
+                    display_missing = missing_set
+                return TrilingualCheckResult(status="Non-trilingual", error=f"missing languages: {', '.join(sorted(display_missing))}")
 
         except Exception as exc:
             logger.debug("Trilingual check failed for %s: %s", url, exc)
