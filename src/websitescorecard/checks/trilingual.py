@@ -33,6 +33,7 @@ HTML_GOOG_TE_COMBO = 'goog-te-combo'
 HTML_GOOGLE_TRANSLATE_ELEMENT_JS = 'translate.google.com/translate_a/element.js'
 
 _playwright_lock = threading.Lock()
+
 class TrilingualCheck:
     name = "trilingual"
     column = "trilingual_status"
@@ -139,9 +140,11 @@ class TrilingualCheck:
 
                     browser.close()
 
-            # Match collected values against required languages
+            # Match collected values against required languages (word-boundary matching
+            # to avoid false positives like 'en' in 'sentence')
             for lang, aliases in LANG_OPTION_MAP.items():
-                if any(alias in val for val in option_values for alias in aliases):
+                alias_pattern = '|'.join(re.escape(a) for a in aliases)
+                if any(re.search(rf'\b(?:{alias_pattern})\b', val) for val in option_values):
                     found_langs.add(lang)
 
             missing = [l for l in LANGUAGE_KEY if l not in found_langs]
@@ -157,9 +160,9 @@ class TrilingualCheck:
         # Exact patterns for short and long forms, plus optional locale codes (e.g. -US, -lk)
         locale_suffix = r'(?:-[a-zA-Z]+)?'
         lang_regex_map = {
-            'en': rf'en(?:glish|g)?{locale_suffix}',
-            'si': rf'si(?:nhala|n)?{locale_suffix}',
-            'ta': rf'ta(?:mil|m)?{locale_suffix}'
+            'en': rf'en(?:glish)?{locale_suffix}',
+            'si': rf'si(?:nhala)?{locale_suffix}',
+            'ta': rf'ta(?:mil)?{locale_suffix}'
         }
 
         found_langs: set[str] = set()
@@ -211,6 +214,8 @@ class TrilingualCheck:
                     browser = p.chromium.launch()
                     
                     targets = {}
+                    if 'en' in langs_to_check:
+                        targets['en'] = r'\benglish\b|^en$'
                     if 'si' in langs_to_check:
                         targets['si'] = r'\bsinhala\b|සිංහල|^si$'
                     if 'ta' in langs_to_check:
@@ -276,7 +281,8 @@ class TrilingualCheck:
                     
                     browser.close()
             return [lang for lang in langs_to_check if lang not in found_langs]
-        except Exception:
+        except Exception as exc:
+            logger.debug("Language button verification failed: %s", exc)
             return missing
 
     def _check_browser_storage_keys(self, url) -> tuple[bool, list[str], str]:
@@ -355,13 +361,18 @@ class TrilingualCheck:
             passed_url_loc, missing_url_localization = self._check_url_localization_patterns(soup)
             passed_uni, missing_unicode = self._check_unicode_content(soup)
 
-            missing_set = set(missing_url_localization) & set(missing_unicode)
-            missing = list(missing_set)
             passed_criteria: list[str] = []
             if passed_url_loc:
                 passed_criteria.append("url_localization")
             if passed_uni:
                 passed_criteria.append("unicode_content")
+
+            # Only declare languages found when at least one check confirmed all three;
+            # partial coverage across checks does not count.
+            if passed_criteria:
+                missing = []
+            else:
+                missing = list(set(missing_url_localization) | set(missing_unicode))
             criteria_str = ", ".join(passed_criteria) if passed_criteria else "js_rendered"
             return (len(missing) == 0, missing, f"{criteria_str}")
         except Exception as exc:
@@ -373,14 +384,18 @@ class TrilingualCheck:
         google_widget = self._check_google_translate(soup)
         passed_url_loc, missing_url_loc = self._check_url_localization_patterns(soup)
 
-        missing_set = set(missing_attribute) & set(missing_url_loc)
-        found_langs = set(LANGUAGE_KEY) - missing_set
-        
         passed_criteria: list[str] = []
         if passed_attribute:
             passed_criteria.append("html_attribute")
         if passed_url_loc:
             passed_criteria.append("url_localization")
+
+        # Only count languages as found when at least one check confirmed all three;
+        # partial coverage across checks does not count as trilingual.
+        if passed_criteria:
+            found_langs = set(LANGUAGE_KEY)
+        else:
+            found_langs = set()
             
         return found_langs, google_widget, passed_criteria
 
@@ -412,8 +427,8 @@ class TrilingualCheck:
                     lang_links.add(clean_url)
                 else:
                     other_links.add(clean_url)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Error extracting internal links: %s", exc)
         return list(lang_links) + list(other_links)
 
     def run(self, url: str) -> CheckResult:
@@ -449,7 +464,7 @@ class TrilingualCheck:
                     logger.debug("Google Translate widget found but missing languages: %s", gt_missing)
 
             if len(found_langs) == 3:
-                return CheckResult(status="trilingual", error=None, details=", ".join(passed_criteria) or "static_checks")
+                return CheckResult(status="trilingual", error=None, details=", ".join(passed_criteria))
 
             # Try deeplink crawling
             internal_links = self._get_internal_links(response.url, soup)
@@ -468,6 +483,8 @@ class TrilingualCheck:
                         dl_gt_passed, dl_gt_missing = self._verify_google_translate_languages(link)
                         if dl_gt_passed:
                             return CheckResult(status="trilingual", error=None, details=f"deeplink_crawl: {dl_google_widget}: verified")
+                        else:
+                            logger.debug("Deeplink Google Translate widget missing languages: %s", dl_gt_missing)
                     
                     found_langs.update(dl_found)
                     passed_criteria.extend(dl_criteria)
