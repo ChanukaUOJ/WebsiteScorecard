@@ -8,10 +8,16 @@ from urllib.parse import urljoin, urlparse
 from websitescorecard.url_utils import parse_url
 from websitescorecard.checks.base import CheckResult
 from bs4 import BeautifulSoup
+from dataclasses import dataclass
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger(__name__)
+
+@dataclass(frozen=True)
+class TrilingualCheckResult(CheckResult):
+    details: str | None = None
+    deeplink: str | None = None
 
 LANGUAGE_KEY = ['en','si','ta']
 
@@ -38,13 +44,36 @@ class TrilingualCheck:
     name = "trilingual"
     column = "trilingual_status"
     error_column = "trilingual_error"
-    details_column = "trilingual_details"
+    extra_columns = {
+        "details": "trilingual_details",
+        "deeplink": "trilingual_deeplink"
+    }
 
     def __init__(self, timeout: float = 10.0) -> None:
         self.timeout = timeout
 
-    def _check_html_attribute(self, soup: BeautifulSoup) -> tuple[bool, list[str]]:
-        hreflangs = [link.get(HTML_KEY_HREFLANG) for link in soup.find_all(HTML_KEY_LINK, rel=HTML_KEY_ALTERNATE)]
+    def _check_html_attribute(self, url: str, soup: BeautifulSoup) -> tuple[bool, list[str]]:
+        base_domain = urlparse(url).netloc
+        if base_domain.startswith('www.'):
+            base_domain = base_domain[4:]
+
+        hreflangs = []
+        for link in soup.find_all(HTML_KEY_LINK, rel=HTML_KEY_ALTERNATE):
+            hreflang = link.get(HTML_KEY_HREFLANG)
+            href = link.get('href')
+            if not hreflang:
+                continue
+            if href:
+                absolute_url = urljoin(url, href)
+                href_domain = urlparse(absolute_url).netloc
+                if href_domain.startswith('www.'):
+                    href_domain = href_domain[4:]
+                
+                # Check if href domain is the same or a subdomain
+                if base_domain and not href_domain.endswith(base_domain):
+                    continue
+            hreflangs.append(hreflang)
+
         found_langs = {lang.split('-')[0].lower() for lang in hreflangs if lang}
         
         # Also check the base <html> tag's lang attribute (e.g. <html lang="en">)
@@ -192,7 +221,7 @@ class TrilingualCheck:
         found_langs: set[str] = set()
         MIN_CHARS = 50
 
-        if len(re.findall(r'[a-zA-Z]', text)) >= MIN_CHARS:
+        if len(re.findall(r'[a-zA-Z]', text)) >= 150:
             found_langs.add('en')
 
         if len(re.findall(r'[\u0D80-\u0DFF]', text)) >= MIN_CHARS:
@@ -361,6 +390,17 @@ class TrilingualCheck:
             passed_url_loc, missing_url_localization = self._check_url_localization_patterns(soup)
             passed_uni, missing_unicode = self._check_unicode_content(soup)
 
+            # If it found exactly 2 localization links, and the 3rd language is the language of the page itself,
+            # we consider it fully trilingual (since you don't need a switcher to the language you're reading).
+            found_by_url = set(LANGUAGE_KEY) - set(missing_url_localization)
+            if len(found_by_url) == 2:
+                missing_1 = (set(LANGUAGE_KEY) - found_by_url).pop()
+                if missing_1 not in missing_unicode: # meaning it IS in current_page_langs
+                    found_by_url.add(missing_1)
+                    
+            if len(found_by_url) == 3:
+                passed_url_loc = True
+
             passed_criteria: list[str] = []
             if passed_url_loc:
                 passed_criteria.append("url_localization")
@@ -379,10 +419,30 @@ class TrilingualCheck:
             logger.debug("Browser storage check failed: %s", exc)
             return (False, list(LANGUAGE_KEY), "error")
     
-    def _analyze_soup(self, soup: BeautifulSoup) -> tuple[set[str], str | None, list[str]]:
-        passed_attribute, missing_attribute = self._check_html_attribute(soup)
+    def _analyze_soup(self, url: str, soup: BeautifulSoup) -> tuple[set[str], str | None, list[str]]:
+        passed_attribute, missing_attribute = self._check_html_attribute(url, soup)
         google_widget = self._check_google_translate(soup)
         passed_url_loc, missing_url_loc = self._check_url_localization_patterns(soup)
+        
+        passed_uni, missing_uni = self._check_unicode_content(soup)
+        current_page_langs = set(LANGUAGE_KEY) - set(missing_uni)
+        
+        found_by_attr = set(LANGUAGE_KEY) - set(missing_attribute)
+        found_by_url = set(LANGUAGE_KEY) - set(missing_url_loc)
+        
+        # If it found exactly 2 switchers, and the 3rd language is the language of the page itself, it passes.
+        if len(found_by_attr) == 2:
+            missing_1 = (set(LANGUAGE_KEY) - found_by_attr).pop()
+            if missing_1 in current_page_langs:
+                found_by_attr.add(missing_1)
+                
+        if len(found_by_url) == 2:
+            missing_1 = (set(LANGUAGE_KEY) - found_by_url).pop()
+            if missing_1 in current_page_langs:
+                found_by_url.add(missing_1)
+                
+        passed_attribute = len(found_by_attr) == 3
+        passed_url_loc = len(found_by_url) == 3
 
         passed_criteria: list[str] = []
         if passed_attribute:
@@ -404,6 +464,9 @@ class TrilingualCheck:
         other_links = set()
         try:
             base_domain = urlparse(base_url).netloc
+            if base_domain.startswith('www.'):
+                base_domain = base_domain[4:]
+                
             for a in soup.find_all('a', href=True):
                 href = a.get('href', '').strip()
                 text = a.get_text().strip().lower()
@@ -413,7 +476,11 @@ class TrilingualCheck:
                 absolute_url = urljoin(base_url, href)
                 parsed_url = urlparse(absolute_url)
                 
-                if parsed_url.netloc != base_domain:
+                href_domain = parsed_url.netloc
+                if href_domain.startswith('www.'):
+                    href_domain = href_domain[4:]
+                
+                if href_domain != base_domain:
                     continue
                     
                 if parsed_url.path.lower().endswith(('.pdf', '.jpg', '.jpeg', '.png', '.zip', '.doc', '.docx', '.xls', '.xlsx')):
@@ -435,7 +502,7 @@ class TrilingualCheck:
         try:
             parsed = parse_url(url)
         except ValueError as exc:
-            return CheckResult(status="unreachable", error=str(exc))
+            return TrilingualCheckResult(status="unreachable", error=str(exc))
 
         try:
             headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
@@ -454,17 +521,17 @@ class TrilingualCheck:
             html = response.text
             soup = BeautifulSoup(html, 'html.parser')
 
-            found_langs, google_widget, passed_criteria = self._analyze_soup(soup)
+            found_langs, google_widget, passed_criteria = self._analyze_soup(response.url, soup)
 
             if google_widget:
                 gt_passed, gt_missing = self._verify_google_translate_languages(response.url)
                 if gt_passed:
-                    return CheckResult(status="trilingual", error=None, details=f"{google_widget}: verified")
+                    return TrilingualCheckResult(status="trilingual", error=None, details=f"{google_widget}")
                 else:
                     logger.debug("Google Translate widget found but missing languages: %s", gt_missing)
 
             if len(found_langs) == 3:
-                return CheckResult(status="trilingual", error=None, details=", ".join(passed_criteria))
+                return TrilingualCheckResult(status="trilingual", error=None, details=", ".join(passed_criteria))
 
             # Try deeplink crawling
             internal_links = self._get_internal_links(response.url, soup)
@@ -473,16 +540,18 @@ class TrilingualCheck:
             
             sample_links = internal_links[:5] # The first links are prioritized language links
 
+            checked_links = []
             for link in sample_links:
+                checked_links.append(link)
                 try:
                     dl_response = requests.get(link, timeout=self.timeout, headers=headers, verify=False)
                     dl_soup = BeautifulSoup(dl_response.text, 'html.parser')
-                    dl_found, dl_google_widget, dl_criteria = self._analyze_soup(dl_soup)
+                    dl_found, dl_google_widget, dl_criteria = self._analyze_soup(link, dl_soup)
                     
                     if dl_google_widget:
                         dl_gt_passed, dl_gt_missing = self._verify_google_translate_languages(link)
                         if dl_gt_passed:
-                            return CheckResult(status="trilingual", error=None, details=f"deeplink_crawl: {dl_google_widget}: verified")
+                            return TrilingualCheckResult(status="trilingual", error=None, details=f"deeplink_crawl: {dl_google_widget}: verified", deeplink=", ".join(checked_links))
                         else:
                             logger.debug("Deeplink Google Translate widget missing languages: %s", dl_gt_missing)
                     
@@ -491,7 +560,7 @@ class TrilingualCheck:
                     
                     if len(found_langs) == 3:
                         unique_criteria = sorted(list(set(passed_criteria)))
-                        return CheckResult(status="trilingual", error=None, details=f"deeplink_crawl: {', '.join(unique_criteria)}")
+                        return TrilingualCheckResult(status="trilingual", error=None, details=f"deeplink_crawl: {', '.join(unique_criteria)}", deeplink=", ".join(checked_links))
                 except Exception:
                     continue
 
@@ -501,18 +570,18 @@ class TrilingualCheck:
             missing_set = missing_set & set(missing_browser)
 
             if len(missing_set) == 0:
-                return CheckResult(status="trilingual", error=None, details=browser_method)
+                return TrilingualCheckResult(status="trilingual", error=None, details=browser_method)
                 
             # Final Fallback: Functional Verification via click
             missing_click = self._verify_language_buttons_via_browser(response.url, list(missing_set))
             missing_set = missing_set & set(missing_click)
 
             if len(missing_set) == 0:
-                return CheckResult(status="trilingual", error=None, details="verified_switcher_click")
+                return TrilingualCheckResult(status="trilingual", error=None, details="verified_switcher_click")
             else:
-                return CheckResult(status="Non-trilingual", error=f"missing languages: {', '.join(sorted(missing_set))}", details="non_trilingual")
+                return TrilingualCheckResult(status="Non-trilingual", error=f"missing languages: {', '.join(sorted(missing_set))}")
 
         except Exception as exc:
             logger.debug("Trilingual check failed for %s: %s", url, exc)
-            return CheckResult(status="unreachable", error="Can't Access")
+            return TrilingualCheckResult(status="unreachable", error="Can't Access")
         

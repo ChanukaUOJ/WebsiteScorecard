@@ -28,8 +28,9 @@ def _output_columns(original: list[str], checks: list[Check], include_errors: bo
         columns.append(check.column)
         if include_errors and check.error_column:
             columns.append(check.error_column)
-        if getattr(check, 'details_column', None):
-            columns.append(check.details_column)
+        if getattr(check, 'extra_columns', None):
+            for col_name in check.extra_columns.values():
+                columns.append(col_name)
     return columns
 
 
@@ -41,14 +42,16 @@ def _run_checks_for_row(url: str, checks: list[Check]) -> dict[str, str]:
             results[check.column] = result.status
             if check.error_column:
                 results[check.error_column] = result.error or ""
-            if getattr(check, 'details_column', None):
-                results[check.details_column] = result.details or ""
+            if getattr(check, 'extra_columns', None):
+                for attr_name, col_name in check.extra_columns.items():
+                    results[col_name] = getattr(result, attr_name, None) or ""
         except Exception as exc:
             results[check.column] = "error"
             if check.error_column:
                 results[check.error_column] = f"Unexpected error: {exc}"
-            if getattr(check, 'details_column', None):
-                results[check.details_column] = ""
+            if getattr(check, 'extra_columns', None):
+                for col_name in check.extra_columns.values():
+                    results[col_name] = ""
     return results
 
 

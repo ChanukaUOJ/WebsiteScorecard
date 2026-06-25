@@ -11,12 +11,13 @@ from typing import Protocol
 class CheckResult:
     status: str
     error: str | None = None
-    details: Optional[str] = None
 
 class Check(Protocol):
     name: str
     column: str
     error_column: str | None
-    details_column: Optional[str] = None
+    
+    # Optional mapping of Result attribute name -> CSV column name
+    extra_columns: Optional[dict[str, str]] = None
 
     def run(self, url: str) -> CheckResult: ...
