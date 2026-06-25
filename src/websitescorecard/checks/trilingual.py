@@ -1,4 +1,3 @@
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 import logging
 import threading
 import re
@@ -8,6 +7,7 @@ from urllib.parse import urljoin, urlparse
 from websitescorecard.url_utils import parse_url
 from websitescorecard.checks.base import CheckResult
 from bs4 import BeautifulSoup
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 from dataclasses import dataclass
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -258,6 +258,7 @@ class TrilingualCheck:
                             page.goto(url, wait_until="load", timeout=30000)
                             page.wait_for_timeout(2000)
                         except PlaywrightTimeoutError:
+                            self._had_timeout = True
                             context.close()
                             continue
                             
@@ -312,6 +313,7 @@ class TrilingualCheck:
             return [lang for lang in langs_to_check if lang not in found_langs]
         except Exception as exc:
             logger.debug("Language button verification failed: %s", exc)
+            self._had_timeout = True
             return missing
 
     def _check_browser_storage_keys(self, url) -> tuple[bool, list[str], str]:
@@ -325,7 +327,7 @@ class TrilingualCheck:
                         page.goto(url, wait_until="load", timeout=self.timeout * 1000)
                         page.wait_for_timeout(3000)
                     except PlaywrightTimeoutError:
-                        pass
+                        self._had_timeout = True
 
                     # Extract localStorage directly
                     storage = page.evaluate("""()=>{
@@ -381,7 +383,7 @@ class TrilingualCheck:
                                 
                         if len(missing_injection) == 0:
                             browser.close()
-                            return (True, missing_injection, "browser_storage")
+                            return (True, missing_injection, "BROWSER_STORAGE")
 
                     html = original_html
                     browser.close()
@@ -403,9 +405,9 @@ class TrilingualCheck:
 
             passed_criteria: list[str] = []
             if passed_url_loc:
-                passed_criteria.append("url_localization")
+                passed_criteria.append("URL_LOCALIZATION")
             if passed_uni:
-                passed_criteria.append("unicode_content")
+                passed_criteria.append("UNICODE_CONTENT")
 
             # Only declare languages found when at least one check confirmed all three;
             # partial coverage across checks does not count.
@@ -413,11 +415,12 @@ class TrilingualCheck:
                 missing = []
             else:
                 missing = list(set(missing_url_localization) | set(missing_unicode))
-            criteria_str = ", ".join(passed_criteria) if passed_criteria else "js_rendered"
+            criteria_str = ", ".join(passed_criteria) if passed_criteria else "JS_RENDERED"
             return (len(missing) == 0, missing, f"{criteria_str}")
         except Exception as exc:
             logger.debug("Browser storage check failed: %s", exc)
-            return (False, list(LANGUAGE_KEY), "error")
+            self._had_timeout = True
+            return (False, list(LANGUAGE_KEY), "ERROR")
     
     def _analyze_soup(self, url: str, soup: BeautifulSoup) -> tuple[set[str], str | None, list[str]]:
         passed_attribute, missing_attribute = self._check_html_attribute(url, soup)
@@ -446,9 +449,11 @@ class TrilingualCheck:
 
         passed_criteria: list[str] = []
         if passed_attribute:
-            passed_criteria.append("html_attribute")
+            passed_criteria.append("HTML_ATTRIBUTE")
         if passed_url_loc:
-            passed_criteria.append("url_localization")
+            passed_criteria.append("URL_LOCALIZATION")
+        if passed_uni:
+            passed_criteria.append("UNICODE_CONTENT")
 
         # Only count languages as found when at least one check confirmed all three;
         # partial coverage across checks does not count as trilingual.
@@ -502,7 +507,9 @@ class TrilingualCheck:
         try:
             parsed = parse_url(url)
         except ValueError as exc:
-            return TrilingualCheckResult(status="unreachable", error=str(exc))
+            return TrilingualCheckResult(status="UNREACHABLE", error=str(exc))
+
+        self._had_timeout = False
 
         try:
             headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
@@ -526,12 +533,12 @@ class TrilingualCheck:
             if google_widget:
                 gt_passed, gt_missing = self._verify_google_translate_languages(response.url)
                 if gt_passed:
-                    return TrilingualCheckResult(status="trilingual", error=None, details=f"{google_widget}")
+                    return TrilingualCheckResult(status="TRILINGUAL", error=None, details="GOOGLE_TRANSLATE_API")
                 else:
                     logger.debug("Google Translate widget found but missing languages: %s", gt_missing)
 
             if len(found_langs) == 3:
-                return TrilingualCheckResult(status="trilingual", error=None, details=", ".join(passed_criteria))
+                return TrilingualCheckResult(status="TRILINGUAL", error=None, details=", ".join(passed_criteria))
 
             # Try deeplink crawling
             internal_links = self._get_internal_links(response.url, soup)
@@ -551,7 +558,7 @@ class TrilingualCheck:
                     if dl_google_widget:
                         dl_gt_passed, dl_gt_missing = self._verify_google_translate_languages(link)
                         if dl_gt_passed:
-                            return TrilingualCheckResult(status="trilingual", error=None, details=f"deeplink_crawl: {dl_google_widget}: verified", deeplink=", ".join(checked_links))
+                            return TrilingualCheckResult(status="TRILINGUAL", error=None, details="GOOGLE_TRANSLATE_API", deeplink=", ".join(checked_links))
                         else:
                             logger.debug("Deeplink Google Translate widget missing languages: %s", dl_gt_missing)
                     
@@ -560,20 +567,31 @@ class TrilingualCheck:
                     
                     if len(found_langs) == 3:
                         unique_criteria = sorted(list(set(passed_criteria)))
-                        return TrilingualCheckResult(status="trilingual", error=None, details=f"deeplink_crawl: {', '.join(unique_criteria)}", deeplink=", ".join(checked_links))
-                except Exception:
+                        return TrilingualCheckResult(status="TRILINGUAL", error=None, details=f"DEEPLINK_CRAWL: {', '.join(unique_criteria)}", deeplink=", ".join(checked_links))
+                except Exception as exc:
+                    if 'timeout' in str(exc).lower() or 'timed out' in str(exc).lower():
+                        self._had_timeout = True
                     continue
 
             # Fallback to Playwright on homepage
-            _, missing_browser, browser_method = self._check_browser_storage_keys(response.url)
+            try:
+                _, missing_browser, browser_method = self._check_browser_storage_keys(response.url)
+            except Exception:
+                self._had_timeout = True
+                missing_browser = list(LANGUAGE_KEY)
+                browser_method = "ERROR"
             missing_set = set(LANGUAGE_KEY) - found_langs
             missing_set = missing_set & set(missing_browser)
 
             if len(missing_set) == 0:
-                return TrilingualCheckResult(status="trilingual", error=None, details=browser_method)
+                return TrilingualCheckResult(status="TRILINGUAL", error=None, details=browser_method)
                 
             # Final Fallback: Functional Verification via click
-            missing_click = self._verify_language_buttons_via_browser(response.url, list(missing_set))
+            try:
+                missing_click = self._verify_language_buttons_via_browser(response.url, list(missing_set))
+            except Exception:
+                self._had_timeout = True
+                missing_click = list(missing_set)
             missing_set = missing_set & set(missing_click)
 
             # Forgiveness: If we verified 2 languages, and the only missing one is the language we are already reading, it's trilingual.
@@ -586,16 +604,19 @@ class TrilingualCheck:
                     missing_set.remove(missing_1)
 
             if len(missing_set) == 0:
-                return TrilingualCheckResult(status="trilingual", error=None, details="verified_switcher_click")
+                return TrilingualCheckResult(status="TRILINGUAL", error=None, details="VERIFIED_SWITCHER_CLICK")
             else:
                 # Make the error message more intuitive by not claiming the page's native language is 'missing'.
                 # However, if it's a mixed-content page that lacks all switchers, we still report all switchers as missing.
                 display_missing = missing_set - current_page_langs
                 if len(display_missing) == 0:
                     display_missing = missing_set
-                return TrilingualCheckResult(status="Non-trilingual", error=f"missing languages: {', '.join(sorted(display_missing))}")
+
+                if self._had_timeout:
+                     return TrilingualCheckResult(status="TIMEOUT", error=f"Some checks timed out. Potentially missing: {', '.join(sorted(display_missing))}")
+                return TrilingualCheckResult(status="NON_TRILINGUAL", error=f"missing languages: {', '.join(sorted(display_missing))}")
 
         except Exception as exc:
             logger.debug("Trilingual check failed for %s: %s", url, exc)
-            return TrilingualCheckResult(status="unreachable", error="Can't Access")
+            return TrilingualCheckResult(status="UNREACHABLE", error="Can't Access")
         

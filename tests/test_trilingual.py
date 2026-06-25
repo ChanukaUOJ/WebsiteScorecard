@@ -134,11 +134,11 @@ def test_analyze_soup_forgiveness(checker):
     soup = BeautifulSoup(html, "html.parser")
     found_langs, widget, criteria = checker._analyze_soup("https://example.com", soup)
     assert found_langs == {"en", "si", "ta"}
-    assert "url_localization" in criteria
+    assert "URL_LOCALIZATION" in criteria
 
-def test_analyze_soup_mixed_content_no_forgiveness(checker):
-    # Page text has en, si, and ta, but NO switchers
-    en_text = "a" * 50
+def test_analyze_soup_unicode_content_all_three(checker):
+    # Page text has en, si, and ta — unicode_content alone should pass the site
+    en_text = "a" * 150
     si_text = "\u0D80" * 50
     ta_text = "\u0B80" * 50
     html = f"""
@@ -150,8 +150,8 @@ def test_analyze_soup_mixed_content_no_forgiveness(checker):
     """
     soup = BeautifulSoup(html, "html.parser")
     found_langs, widget, criteria = checker._analyze_soup("https://example.com", soup)
-    assert found_langs == set()
-    assert criteria == []
+    assert found_langs == {"en", "si", "ta"}
+    assert "UNICODE_CONTENT" in criteria
 
 # 5. Internal Links
 def test_get_internal_links_strips_www(checker):
@@ -221,7 +221,7 @@ def test_browser_storage_keys_pass(mock_playwright, checker):
     
     passed, missing, method = checker._check_browser_storage_keys("https://example.com")
     assert passed is True
-    assert method == "browser_storage"
+    assert method == "BROWSER_STORAGE"
 
 # 8. Full Workflow
 @patch("websitescorecard.checks.trilingual.requests.get")
@@ -235,18 +235,18 @@ def test_run_total_failure(mock_storage, mock_buttons, mock_requests, checker):
     mock_response.url = "https://example.com"
     mock_requests.return_value = mock_response
     
-    mock_storage.return_value = (False, ["si", "ta"], "error")
+    mock_storage.return_value = (False, ["si", "ta"], "ERROR")
     mock_buttons.return_value = ["si", "ta"]
     
     result = checker.run("example.com")
-    assert result.status == "Non-trilingual"
+    assert result.status == "NON_TRILINGUAL"
     assert result.error == "missing languages: si, ta"
 
 @patch("websitescorecard.checks.trilingual.requests.get")
 def test_run_unreachable(mock_requests, checker):
     mock_requests.side_effect = Exception("Connection refused")
     result = checker.run("example.com")
-    assert result.status == "unreachable"
+    assert result.status == "UNREACHABLE"
 
 @patch("websitescorecard.checks.trilingual.requests.get")
 def test_run_homepage_success(mock_requests, checker):
@@ -266,5 +266,5 @@ def test_run_homepage_success(mock_requests, checker):
     mock_requests.return_value = mock_response
     
     result = checker.run("example.com")
-    assert result.status == "trilingual"
-    assert result.details == "html_attribute"
+    assert result.status == "TRILINGUAL"
+    assert result.details == "HTML_ATTRIBUTE"
