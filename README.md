@@ -6,6 +6,7 @@ CLI to scan websites from a CSV and enrich rows with check results (SSL certific
 
 - Python 3.10 or newer
 - A CSV file with a column containing website URLs (domains or full URLs)
+- **Playwright Chromium binaries** — required by the `trilingual` check (see step 2 below)
 
 ## Quick start
 
@@ -31,7 +32,17 @@ Activate the virtual environment in any new terminal session before running comm
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 ```
 
-### 2. Test data
+### 2. Install Playwright browser binaries
+
+The `trilingual` check uses a headless Chromium browser to verify language switchers and localStorage-based locale detection. After installing the package, run:
+
+```bash
+playwright install chromium
+```
+
+> **Note:** This is a one-time step per environment. Without it, any scan that includes `--checks trilingual` will crash at runtime with a "Executable doesn't exist" error.
+
+### 3. Test data
 
 The repo includes a sample CSV at `data/mins_depts_test.csv` with Sri Lankan ministries and departments:
 
@@ -45,7 +56,7 @@ Ministry,Ministry of Digital Economy,midec.gov.lk
 
 The `URL` column contains bare domains (e.g. `defence.lk`). Full URLs such as `https://example.com/path` also work.
 
-### 3. Run a scan
+### 4. Run a scan
 
 ```bash
 websitescorecard scan data/mins_depts_test.csv --column URL --checks ssl,trilingual
@@ -59,7 +70,7 @@ Specify an output file:
 websitescorecard scan data/mins_depts_test.csv -c URL -o data/mins_depts_scored.csv --checks ssl,trilingual
 ```
 
-### 4. Check the output
+### 5. Check the output
 
 ```csv
 Type,Institution Name,URL,ssl_status,ssl_error,trilingual_status,trilingual_error
@@ -81,10 +92,12 @@ The `ssl_error` column contains the underlying error message when something went
 
 | `trilingual_status` | Meaning |
 |-------------------|---------|
-| `trilingual` | Page contains all 3 official languages (Sinhala, Tamil, English) |
-| `Non-trilingual` | Page is missing one or more official languages |
-| `unreachable` | Could not connect to evaluate trilingual status (bad domain, DNS failure, timeout, connection error) |
-| `error` | Check raised an unexpected internal error (recorded in `trilingual_error`) |
+| `TRILINGUAL` | Page supports all 3 official languages (Sinhala, Tamil, English) |
+| `NON_TRILINGUAL` | Page is missing one or more official languages |
+| `TIMEOUT` | Some checks timed out; result may be incomplete |
+| `UNREACHABLE` | Could not connect to evaluate trilingual status (bad domain, DNS failure, timeout, connection error) |
+
+The `trilingual_details` column records which detection method confirmed trilingual support (e.g. `HTML_ATTRIBUTE`, `URL_LOCALIZATION`, `UNICODE_CONTENT`, `GOOGLE_TRANSLATE_API`, `BROWSER_STORAGE`, `VERIFIED_SWITCHER_CLICK`, `DEEPLINK_CRAWL`). The `trilingual_deeplink` column lists any internal links that were crawled during detection.
 
 ## CLI reference
 
