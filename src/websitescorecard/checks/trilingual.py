@@ -526,9 +526,10 @@ class TrilingualCheck:
             except Exception:
                 needs_fallback = True
                 
-            # Fallback to https://www if needed
+            # Fallback to https://www if needed (avoid double www. if already present)
             if needs_fallback:
-                response = requests.get(f'https://www.{parsed.hostname}', timeout=self.timeout, headers=headers, verify=False)
+                www_host = parsed.hostname if parsed.hostname.startswith('www.') else f'www.{parsed.hostname}'
+                response = requests.get(f'https://{www_host}', timeout=self.timeout, headers=headers, verify=False)
                 
             html = response.text
             soup = BeautifulSoup(html, 'html.parser')

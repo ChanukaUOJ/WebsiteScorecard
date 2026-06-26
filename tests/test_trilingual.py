@@ -270,3 +270,33 @@ def test_run_homepage_success(mock_requests, checker):
     result = checker.run("example.com")
     assert result.status == "TRILINGUAL"
     assert result.details == "HTML_ATTRIBUTE"
+
+@patch("websitescorecard.checks.trilingual.requests.get")
+def test_run_www_hostname_no_double_www(mock_requests, checker):
+    """If the URL already contains www., the fallback must NOT produce www.www.hostname."""
+    mock_response = MagicMock()
+    mock_response.status_code = 404  # triggers fallback
+    mock_response.text = ""
+    mock_response.url = "http://www.example.com"
+
+    fallback_response = MagicMock()
+    fallback_response.status_code = 200
+    fallback_response.text = """
+    <html>
+        <head>
+            <link rel="alternate" hreflang="en" href="/en/" />
+            <link rel="alternate" hreflang="si" href="/si/" />
+            <link rel="alternate" hreflang="ta" href="/ta/" />
+        </head>
+    </html>
+    """
+    fallback_response.url = "https://www.example.com"
+    mock_requests.side_effect = [mock_response, fallback_response]
+
+    result = checker.run("www.example.com")
+    assert result.status == "TRILINGUAL"
+
+    # Verify the fallback URL used was https://www.example.com, not https://www.www.example.com
+    called_urls = [call.args[0] for call in mock_requests.call_args_list]
+    assert not any("www.www." in url for url in called_urls), \
+        f"Double www. detected in fallback URLs: {called_urls}"
