@@ -1,50 +1,50 @@
-Type,Institution Name,URL,ssl_status,ssl_error
-Ministry,Ministry of Defence,defence.lk,valid,
-Ministry,"Ministry of Finance, Planning and Economic Development",treasury.gov.lk,valid,
-Ministry,Ministry of Digital Economy,midec.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known"
-Ministry,"Ministry of Foreign Affairs, Foreign Employment and Tourism",mfa.gov.lk,valid,
-Ministry,"Ministry of Education, Higher Education and Vocational Education",moe.gov.lk,valid,
-Ministry,"Ministry of Agriculture, Livestock, Land and Irrigation",agrimin.gov.lk,valid,
-Ministry,"Ministry of Transport, Highways and Urban Development",transport.gov.lk,valid,
-Ministry,"Ministry of Public Administration, Provincial Councils and Local Government",pubad.gov.lk,valid,
-Ministry,Ministry of Health and Mass Media,health.gov.lk,valid,
-Ministry,Ministry of Justice and National Integration,moj.gov.lk,valid,
-Ministry,Ministry of Public Security and Parliamentary Affairs,pubsec.gov.lk,valid,
-Ministry,Ministry of Industry and Entrepreneurship Development,industry.gov.lk,valid,
-Ministry,"Ministry of Trade, Commerce, Food Security and Cooperative Development",ment.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known"
-Ministry,Ministry of Environment,env.gov.lk,valid,
-Ministry,Ministry of Energy,energy.gov.lk,valid,
-Ministry,"Ministry of Housing, Construction and Water Supply",housingmin.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known"
-Ministry,Ministry of Labor,labourmin.gov.lk,valid,
-Ministry,Ministry of Plantation and Community Infrastructure,plantationindustries.gov.lk,invalid,"Hostname mismatch, certificate is not valid for 'plantationindustries.gov.lk'."
-Ministry,Ministry of Ports and Civil Aviation,portaviation.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known"
-Ministry,"Ministry of Fisheries, Aquatic and Ocean Resources",fisheries.gov.lk,valid,
-Ministry,Ministry of Women and Child Affairs,childwomen.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known"
-Ministry,"Ministry of Rural Development, Social Security and Community Empowerment",socialservices.gov.lk,valid,
-Ministry,"Ministry of Buddhasasana, Religious and Cultural Affairs",mbra.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known"
-Ministry,Ministry of Youth Affairs and Sports,sportsmin.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known"
-Ministry,Ministry of Science and Technology,most.gov.lk,valid,
-Department,Department of Immigration and Emigration,immigration.gov.lk,valid,
-Department,Department of Motor Traffic,dmt.gov.lk,valid,
-Department,Department of Registration of Persons,drp.gov.lk,valid,
-Department,Department of Registrar General,rgd.gov.lk,valid,
-Department,Department of Inland Revenue,ird.gov.lk,valid,
-Department,Sri Lanka Customs,customs.gov.lk,valid,
-Department,Department of Pensions,pensions.gov.lk,valid,
-Department,Department of Census and Statistics,statistics.gov.lk,unreachable,[Errno 54] Connection reset by peer
-Department,Department of Government Information,dgi.gov.lk,valid,
-Department,Department of Government Printing,documents.gov.lk,valid,
-Department,Department of Excise,excise.gov.lk,valid,
-Department,Department of National Budget,nationalbudget.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known"
-Department,Department of Meteorology,meteo.gov.lk,valid,
-Department,Department of Wildlife Conservation,dwc.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known"
-Department,Department of Forest Conservation,forestdept.gov.lk,expired,unable to get local issuer certificate
-Department,Department of National Zoological Gardens,colombozoo.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known"
-Department,Department of Examinations,doenets.lk,valid,
-Department,Department of Archaeology,archaeology.gov.lk,valid,
-Department,Department of Samurdhi,samurdhi.gov.lk,valid,
-Department,LSF,opensource.lk,invalid,"Hostname mismatch, certificate is not valid for 'opensource.lk'."
-Expired,Expired SSL,expired.badssl.com,unreachable,[Errno 54] Connection reset by peer
-Self-Signed,Self-Signed SSL,self-signed.badssl.com,invalid,self-signed certificate
-Wrong Host,Wrong Host SSL,wrong.host.badssl.com,invalid,"Hostname mismatch, certificate is not valid for 'wrong.host.badssl.com'."
-Never SSL,Never SSL,neverssl.com,valid,
+Type,Institution Name,URL,ssl_status,ssl_error,trilingual_status,trilingual_error,trilingual_details,trilingual_deeplink
+Ministry,Ministry of Defence,defence.lk,valid,,TRILINGUAL,,URL_LOCALIZATION,
+Ministry,"Ministry of Finance, Planning and Economic Development",treasury.gov.lk,valid,,TRILINGUAL,,URL_LOCALIZATION,
+Ministry,Ministry of Digital Economy,midec.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known",UNREACHABLE,Can't Access,,
+Ministry,"Ministry of Foreign Affairs, Foreign Employment and Tourism",mfa.gov.lk,valid,,TRILINGUAL,,DEEPLINK_CRAWL: UNICODE_CONTENT,https://www.mfa.gov.lk/en
+Ministry,"Ministry of Education, Higher Education and Vocational Education",moe.gov.lk,valid,,TRILINGUAL,,HTML_ATTRIBUTE,
+Ministry,"Ministry of Agriculture, Livestock, Land and Irrigation",agrimin.gov.lk,valid,,NON_TRILINGUAL,"missing languages: si, ta",,
+Ministry,"Ministry of Transport, Highways and Urban Development",transport.gov.lk,valid,,TRILINGUAL,,URL_LOCALIZATION,
+Ministry,"Ministry of Public Administration, Provincial Councils and Local Government",pubad.gov.lk,valid,,TRILINGUAL,,URL_LOCALIZATION,
+Ministry,Ministry of Health and Mass Media,health.gov.lk,valid,,TRILINGUAL,,"DEEPLINK_CRAWL: HTML_ATTRIBUTE, URL_LOCALIZATION",https://www.health.gov.lk/home/
+Ministry,Ministry of Justice and National Integration,moj.gov.lk,valid,,TRILINGUAL,,"HTML_ATTRIBUTE, URL_LOCALIZATION",
+Ministry,Ministry of Public Security and Parliamentary Affairs,pubsec.gov.lk,valid,,TRILINGUAL,,"HTML_ATTRIBUTE, URL_LOCALIZATION",
+Ministry,Ministry of Industry and Entrepreneurship Development,industry.gov.lk,valid,,TRILINGUAL,,"URL_LOCALIZATION, UNICODE_CONTENT",
+Ministry,"Ministry of Trade, Commerce, Food Security and Cooperative Development",ment.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known",UNREACHABLE,Can't Access,,
+Ministry,Ministry of Environment,env.gov.lk,valid,,TRILINGUAL,,URL_LOCALIZATION,
+Ministry,Ministry of Energy,energy.gov.lk,valid,,TRILINGUAL,,URL_LOCALIZATION,
+Ministry,"Ministry of Housing, Construction and Water Supply",housingmin.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known",UNREACHABLE,Can't Access,,
+Ministry,Ministry of Labor,labourmin.gov.lk,valid,,NON_TRILINGUAL,"missing languages: si, ta",,
+Ministry,Ministry of Plantation and Community Infrastructure,plantationindustries.gov.lk,invalid,"Hostname mismatch, certificate is not valid for 'plantationindustries.gov.lk'.",TRILINGUAL,,GOOGLE_TRANSLATE_API,
+Ministry,Ministry of Ports and Civil Aviation,portaviation.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known",UNREACHABLE,Can't Access,,
+Ministry,"Ministry of Fisheries, Aquatic and Ocean Resources",fisheries.gov.lk,valid,,TRILINGUAL,,HTML_ATTRIBUTE,
+Ministry,Ministry of Women and Child Affairs,childwomen.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known",UNREACHABLE,Can't Access,,
+Ministry,"Ministry of Rural Development, Social Security and Community Empowerment",socialservices.gov.lk,valid,,TRILINGUAL,,URL_LOCALIZATION,
+Ministry,"Ministry of Buddhasasana, Religious and Cultural Affairs",mbra.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known",UNREACHABLE,Can't Access,,
+Ministry,Ministry of Youth Affairs and Sports,sportsmin.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known",UNREACHABLE,Can't Access,,
+Ministry,Ministry of Science and Technology,most.gov.lk,valid,,TRILINGUAL,,URL_LOCALIZATION,
+Department,Department of Immigration and Emigration,immigration.gov.lk,valid,,TRILINGUAL,,UNICODE_CONTENT,
+Department,Department of Motor Traffic,dmt.gov.lk,valid,,TRILINGUAL,,"HTML_ATTRIBUTE, URL_LOCALIZATION",
+Department,Department of Registration of Persons,drp.gov.lk,valid,,TRILINGUAL,,VERIFIED_SWITCHER_CLICK,
+Department,Department of Registrar General,rgd.gov.lk,valid,,TRILINGUAL,,"URL_LOCALIZATION, UNICODE_CONTENT",
+Department,Department of Inland Revenue,ird.gov.lk,valid,,UNREACHABLE,Can't Access,,
+Department,Sri Lanka Customs,customs.gov.lk,valid,,TRILINGUAL,,GOOGLE_TRANSLATE_API,
+Department,Department of Pensions,pensions.gov.lk,valid,,TRILINGUAL,,"HTML_ATTRIBUTE, URL_LOCALIZATION",
+Department,Department of Census and Statistics,statistics.gov.lk,unreachable,[Errno 54] Connection reset by peer,TRILINGUAL,,VERIFIED_SWITCHER_CLICK,
+Department,Department of Government Information,dgi.gov.lk,valid,,TRILINGUAL,,VERIFIED_SWITCHER_CLICK,
+Department,Department of Government Printing,documents.gov.lk,valid,,NON_TRILINGUAL,"missing languages: si, ta",,
+Department,Department of Excise,excise.gov.lk,valid,,TRILINGUAL,,"HTML_ATTRIBUTE, URL_LOCALIZATION",
+Department,Department of National Budget,nationalbudget.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known",UNREACHABLE,Can't Access,,
+Department,Department of Meteorology,meteo.gov.lk,valid,,TRILINGUAL,,UNICODE_CONTENT,
+Department,Department of Wildlife Conservation,dwc.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known",TRILINGUAL,,DEEPLINK_CRAWL: UNICODE_CONTENT,"https://www.dwc.gov.lk/?page_id=203, https://www.dwc.gov.lk/?page_id=257, https://www.dwc.gov.lk/?p=914, https://www.dwc.gov.lk/?paged=2"
+Department,Department of Forest Conservation,forestdept.gov.lk,expired,unable to get local issuer certificate,TRILINGUAL,,"HTML_ATTRIBUTE, URL_LOCALIZATION",
+Department,Department of National Zoological Gardens,colombozoo.gov.lk,unreachable,"[Errno 8] nodename nor servname provided, or not known",UNREACHABLE,Can't Access,,
+Department,Department of Examinations,doenets.lk,valid,,TRILINGUAL,,BROWSER_STORAGE,
+Department,Department of Archaeology,archaeology.gov.lk,valid,,TRILINGUAL,,GOOGLE_TRANSLATE_API,
+Department,Department of Samurdhi,samurdhi.gov.lk,valid,,TRILINGUAL,,URL_LOCALIZATION,
+Department,LSF,opensource.lk,valid,,NON_TRILINGUAL,"missing languages: si, ta",,
+Expired,Expired SSL,expired.badssl.com,expired,certificate has expired,TIMEOUT,"Some checks timed out. Potentially missing: si, ta",,
+Self-Signed,Self-Signed SSL,self-signed.badssl.com,invalid,self-signed certificate,UNREACHABLE,Can't Access,,
+Wrong Host,Wrong Host SSL,wrong.host.badssl.com,unreachable,[Errno 54] Connection reset by peer,TIMEOUT,"Some checks timed out. Potentially missing: si, ta",,
+Never SSL,Never SSL,neverssl.com,valid,,NON_TRILINGUAL,"missing languages: si, ta",,
