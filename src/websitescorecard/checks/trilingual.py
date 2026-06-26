@@ -50,10 +50,14 @@ class TrilingualCheck:
     }
 
     def __init__(self, timeout: float = 10.0) -> None:
+        """Initialise the checker with a per-request socket timeout.
+        Thread-local storage is created to hold per-call state safely."""
         self.timeout = timeout
         self._local = threading.local()
 
     def _check_html_attribute(self, url: str, soup: BeautifulSoup) -> tuple[bool, list[str]]:
+        """Check hreflang link tags and the root <html lang> attribute for all three languages.
+        Returns (all_found, missing_language_codes)."""
         base_domain = urlparse(url).netloc
         if base_domain.startswith('www.'):
             base_domain = base_domain[4:]
@@ -85,8 +89,8 @@ class TrilingualCheck:
         return (len(missing) == 0, missing)
 
     def _check_google_translate(self, soup: BeautifulSoup) -> str | None:
-        """Detect if a Google Translate / GTranslate widget is present.
-        Returns the widget type string if found, or None."""
+        """Detect whether a Google Translate or GTranslate widget is present in the page.
+        Returns the widget type string ('google_translate' or 'gtranslate'), or None."""
         # Native Google Translate elements
         if soup.find(id=HTML_GOOGLE_TRANSLATE_ELEMENT):
             return 'google_translate'
@@ -109,11 +113,8 @@ class TrilingualCheck:
     def _verify_google_translate_languages(
         self, url: str
     ) -> tuple[bool, list[str]]:
-        """Use Playwright to check whether the Google Translate / GTranslate
-        widget on *url* actually offers English, Sinhala and Tamil.
-
-        Returns (all_found, missing_languages).
-        """
+        """Use Playwright to confirm the Google Translate/GTranslate widget on *url* offers all three languages.
+        Returns (all_found, missing_language_codes)."""
         # Language codes used inside Google Translate / GTranslate <select> options
         LANG_OPTION_MAP: dict[str, list[str]] = {
             'en': ['en', 'english'],
@@ -183,6 +184,8 @@ class TrilingualCheck:
             return (False, list(LANGUAGE_KEY))
 
     def _check_url_localization_patterns(self, soup: BeautifulSoup) -> tuple[bool, list[str]]:
+        """Scan anchor hrefs for path segments or query params matching known language identifiers.
+        Returns (all_found, missing_language_codes)."""
         hrefs = [a.get('href') or '' for a in soup.find_all('a', href=True)]
 
         # Exact patterns for short and long forms, plus optional locale codes (e.g. -US, -lk)
@@ -210,6 +213,8 @@ class TrilingualCheck:
         return (len(missing) == 0, missing)
 
     def _check_unicode_content(self, soup: BeautifulSoup) -> tuple[bool, list[str]]:
+        """Count Unicode characters for English, Sinhala, and Tamil scripts in the page text.
+        Returns (all_found, missing_language_codes)."""
         NOISE_TAGS = frozenset(['script', 'style', 'head', 'meta', 'noscript', 'nav', 'footer', 'header'])
 
         # Single O(N) pass: collect only leaf text nodes whose immediate parent
@@ -244,6 +249,8 @@ class TrilingualCheck:
         return (len(missing) == 0, missing)
 
     def _verify_language_buttons_via_browser(self, url: str, langs_to_check: list[str]) -> list[str]:
+        """Click visible language-switcher buttons on the page via Playwright and verify the resulting content.
+        Returns the list of language codes that remain unverified after clicking."""
         # Returns the list of languages STILL missing after verification
         missing = list(langs_to_check)
         found_langs: set[str] = set()
@@ -324,6 +331,8 @@ class TrilingualCheck:
             return missing
 
     def _check_browser_storage_keys(self, url) -> tuple[bool, list[str], str]:
+        """Use Playwright to inspect localStorage for a language key and inject all three locales to verify rendering.
+        Returns (all_found, missing_language_codes, detection_method_label)."""
         try:
             with _playwright_lock:
                 with sync_playwright() as p:
@@ -428,6 +437,8 @@ class TrilingualCheck:
             return (False, list(LANGUAGE_KEY), "ERROR")
     
     def _analyze_soup(self, url: str, soup: BeautifulSoup) -> tuple[set[str], str | None, list[str]]:
+        """Run all static HTML heuristics (hreflang, URL patterns, Unicode) on a parsed page.
+        Returns (found_language_set, google_widget_type_or_None, passed_criteria_list)."""
         passed_attribute, missing_attribute = self._check_html_attribute(url, soup)
         google_widget = self._check_google_translate(soup)
         passed_url_loc, missing_url_loc = self._check_url_localization_patterns(soup)
@@ -470,6 +481,8 @@ class TrilingualCheck:
         return found_langs, google_widget, passed_criteria
 
     def _get_internal_links(self, base_url: str, soup: BeautifulSoup) -> list[str]:
+        """Extract same-domain internal links from the page, prioritising language-specific paths.
+        Returns a list with language links first, followed by other internal links."""
         lang_links = set()
         other_links = set()
         try:
@@ -509,6 +522,8 @@ class TrilingualCheck:
         return list(lang_links) + list(other_links)
 
     def run(self, url: str) -> CheckResult:
+        """Execute the full trilingual detection pipeline for *url*, from static HTML checks through Playwright fallbacks.
+        Returns a TrilingualCheckResult with status, optional error message, and detection details."""
         try:
             parsed = parse_url(url)
         except ValueError as exc:
