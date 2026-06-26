@@ -6,7 +6,7 @@ import urllib3
 from urllib.parse import urljoin, urlparse
 from websitescorecard.url_utils import parse_url
 from websitescorecard.checks.base import CheckResult
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString, Comment
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 from dataclasses import dataclass
 
@@ -214,10 +214,21 @@ class TrilingualCheck:
     def _check_unicode_content(self, soup: BeautifulSoup) -> tuple[bool, list[str]]:
         NOISE_TAGS = frozenset(['script', 'style', 'head', 'meta', 'noscript', 'nav', 'footer', 'header'])
 
-        # Extract text only from meaningful content tags, skipping those nested inside noise tags
-        content_tags = soup.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'td', 'th', 'span', 'div', 'article', 'section', 'main'])
-        filtered_tags = [tag for tag in content_tags if not any(p.name in NOISE_TAGS for p in tag.parents)]
-        text = ' '.join(tag.get_text(separator=' ', strip=True) for tag in filtered_tags)
+        # Single O(N) pass: collect only leaf text nodes whose immediate parent
+        # is not a noise tag. This avoids text duplication from nested containers
+        # (e.g. a <p> inside a <div> inside a <main> would triple-count the same
+        # text with the old find_all + get_text approach) and eliminates the
+        # O(N*D) parent-chain traversal that the old filter required.
+        parts = []
+        root = soup.html if soup.html else soup
+        for node in root.descendants:
+            if isinstance(node, Comment):
+                continue
+            if isinstance(node, NavigableString):
+                parent_name = node.parent.name if node.parent else None
+                if parent_name not in NOISE_TAGS:
+                    parts.append(str(node))
+        text = ' '.join(parts)
 
         found_langs: set[str] = set()
         MIN_CHARS = 50
