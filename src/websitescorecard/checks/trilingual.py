@@ -125,50 +125,48 @@ class TrilingualCheck:
         try:
             with _playwright_lock:
                 with sync_playwright() as p:
-                    browser = p.chromium.launch()
-                    page = browser.new_page()
-                    try:
-                        page.goto(url, wait_until='load', timeout=self.timeout * 1000)
-                        page.wait_for_timeout(3000)
-                    except PlaywrightTimeoutError:
-                        pass
+                    with p.chromium.launch() as browser:
+                        page = browser.new_page()
+                        try:
+                            page.goto(url, wait_until='load', timeout=self.timeout * 1000)
+                            page.wait_for_timeout(3000)
+                        except PlaywrightTimeoutError:
+                            pass
 
-                    # Collect all <option> values and text from <select> elements
-                    # that are part of the translate widget.
-                    option_values: list[str] = page.evaluate("""() => {
-                        const results = [];
-                        // Google Translate native combo
-                        const goog = document.querySelector('.goog-te-combo, select.gt_selector, select.notranslate');
-                        if (goog) {
-                            for (const opt of goog.options) {
-                                results.push(opt.value.toLowerCase());
-                                results.push(opt.textContent.trim().toLowerCase());
-                            }
-                        }
-                        // GTranslate wrappers often use a <select> with
-                        // class 'gt_selector' or inside '.gtranslate_wrapper'
-                        document.querySelectorAll('.gtranslate_wrapper select, select[onchange*="doGTranslate"]').forEach(sel => {
-                            for (const opt of sel.options) {
-                                results.push(opt.value.toLowerCase());
-                                results.push(opt.textContent.trim().toLowerCase());
-                            }
-                        });
-                        return results;
-                    }""")
-
-                    # Also look for GTranslate link/button based widgets (flag / anchor lists)
-                    if not option_values:
-                        option_values = page.evaluate("""() => {
+                        # Collect all <option> values and text from <select> elements
+                        # that are part of the translate widget.
+                        option_values: list[str] = page.evaluate("""() => {
                             const results = [];
-                            document.querySelectorAll('.gtranslate_wrapper a[data-gt-lang], a.gt-current-lang, a.glink').forEach(a => {
-                                const lang = a.getAttribute('data-gt-lang') || a.getAttribute('href') || '';
-                                results.push(lang.toLowerCase());
-                                results.push(a.textContent.trim().toLowerCase());
+                            // Google Translate native combo
+                            const goog = document.querySelector('.goog-te-combo, select.gt_selector, select.notranslate');
+                            if (goog) {
+                                for (const opt of goog.options) {
+                                    results.push(opt.value.toLowerCase());
+                                    results.push(opt.textContent.trim().toLowerCase());
+                                }
+                            }
+                            // GTranslate wrappers often use a <select> with
+                            // class 'gt_selector' or inside '.gtranslate_wrapper'
+                            document.querySelectorAll('.gtranslate_wrapper select, select[onchange*="doGTranslate"]').forEach(sel => {
+                                for (const opt of sel.options) {
+                                    results.push(opt.value.toLowerCase());
+                                    results.push(opt.textContent.trim().toLowerCase());
+                                }
                             });
                             return results;
                         }""")
 
-                    browser.close()
+                        # Also look for GTranslate link/button based widgets (flag / anchor lists)
+                        if not option_values:
+                            option_values = page.evaluate("""() => {
+                                const results = [];
+                                document.querySelectorAll('.gtranslate_wrapper a[data-gt-lang], a.gt-current-lang, a.glink').forEach(a => {
+                                    const lang = a.getAttribute('data-gt-lang') || a.getAttribute('href') || '';
+                                    results.push(lang.toLowerCase());
+                                    results.push(a.textContent.trim().toLowerCase());
+                                });
+                                return results;
+                            }""")
 
             # Match collected values against required languages (word-boundary matching
             # to avoid false positives like 'en' in 'sentence')
@@ -252,76 +250,73 @@ class TrilingualCheck:
         try:
             with _playwright_lock:
                 with sync_playwright() as p:
-                    browser = p.chromium.launch()
-                    
-                    targets = {}
-                    if 'en' in langs_to_check:
-                        targets['en'] = r'\benglish\b|^en$'
-                    if 'si' in langs_to_check:
-                        targets['si'] = r'\bsinhala\b|සිංහල|^si$'
-                    if 'ta' in langs_to_check:
-                        targets['ta'] = r'\btamil\b|தமிழ்|^ta$'
-                        
-                    for lang, pattern in targets.items():
-                        # Use a fresh context (and page) per language to avoid navigation bleed-over
-                        context = browser.new_context()
-                        page = context.new_page()
-                        try:
-                            page.goto(url, wait_until="load", timeout=30000)
-                            page.wait_for_timeout(2000)
-                        except PlaywrightTimeoutError:
-                            self._local.had_timeout = True
-                            context.close()
-                            continue
+                    with p.chromium.launch() as browser:
+                        targets = {}
+                        if 'en' in langs_to_check:
+                            targets['en'] = r'\benglish\b|^en$'
+                        if 'si' in langs_to_check:
+                            targets['si'] = r'\bsinhala\b|සිංහල|^si$'
+                        if 'ta' in langs_to_check:
+                            targets['ta'] = r'\btamil\b|தமிழ்|^ta$'
                             
-                        # Try to find a clickable element matching the pattern
-                        try:
-                            element_handle = page.evaluate_handle(f"""() => {{
-                                const regex = /{pattern}/i;
-                                const elements = Array.from(document.querySelectorAll('a, button, input[type="submit"], input[type="button"]'));
-                                for (let el of elements) {{
-                                    if (el.innerText && regex.test(el.innerText)) return el;
-                                    if (el.value && regex.test(el.value)) return el;
-                                }}
-                                return null;
-                            }}""")
-                        except Exception:
-                            context.close()
-                            continue
-                        
-                        if element_handle.as_element():
-                            # Click the element
+                        for lang, pattern in targets.items():
+                            # Use a fresh context (and page) per language to avoid navigation bleed-over
+                            context = browser.new_context()
+                            page = context.new_page()
                             try:
-                                element_handle.as_element().click(timeout=5000)
+                                page.goto(url, wait_until="load", timeout=30000)
+                                page.wait_for_timeout(2000)
+                            except PlaywrightTimeoutError:
+                                self._local.had_timeout = True
+                                context.close()
+                                continue
+                                
+                            # Try to find a clickable element matching the pattern
+                            try:
+                                element_handle = page.evaluate_handle(f"""() => {{
+                                    const regex = /{pattern}/i;
+                                    const elements = Array.from(document.querySelectorAll('a, button, input[type="submit"], input[type="button"]'));
+                                    for (let el of elements) {{
+                                        if (el.innerText && regex.test(el.innerText)) return el;
+                                        if (el.value && regex.test(el.value)) return el;
+                                    }}
+                                    return null;
+                                }}""")
                             except Exception:
-                                pass
+                                context.close()
+                                continue
                             
-                            # Always wait for load state to be stable before reading content
-                            try:
-                                page.wait_for_load_state("load", timeout=12000)
-                            except Exception:
-                                pass
-                            page.wait_for_timeout(1000)
-                                    
-                            # Safely extract the HTML
-                            try:
-                                html = page.content()
-                            except Exception:
-                                page.wait_for_timeout(3000)
+                            if element_handle.as_element():
+                                # Click the element
+                                try:
+                                    element_handle.as_element().click(timeout=5000)
+                                except Exception:
+                                    pass
+                                
+                                # Always wait for load state to be stable before reading content
+                                try:
+                                    page.wait_for_load_state("load", timeout=12000)
+                                except Exception:
+                                    pass
+                                page.wait_for_timeout(1000)
+                                        
+                                # Safely extract the HTML
                                 try:
                                     html = page.content()
                                 except Exception:
-                                    context.close()
-                                    continue
+                                    page.wait_for_timeout(3000)
+                                    try:
+                                        html = page.content()
+                                    except Exception:
+                                        context.close()
+                                        continue
+                                        
+                                soup = BeautifulSoup(html, 'html.parser')
+                                _, missing_uni = self._check_unicode_content(soup)
+                                if lang not in missing_uni:
+                                    found_langs.add(lang)
                                     
-                            soup = BeautifulSoup(html, 'html.parser')
-                            _, missing_uni = self._check_unicode_content(soup)
-                            if lang not in missing_uni:
-                                found_langs.add(lang)
-                                
-                        context.close()
-                    
-                    browser.close()
+                            context.close()
             return [lang for lang in langs_to_check if lang not in found_langs]
         except Exception as exc:
             logger.debug("Language button verification failed: %s", exc)
@@ -332,73 +327,71 @@ class TrilingualCheck:
         try:
             with _playwright_lock:
                 with sync_playwright() as p:
-                    browser = p.chromium.launch()
-                    page = browser.new_page()
-                    try:
-                        # Wait for the load event, then give JavaScript 3 seconds to build the DOM.
-                        page.goto(url, wait_until="load", timeout=self.timeout * 1000)
-                        page.wait_for_timeout(3000)
-                    except PlaywrightTimeoutError:
-                        self._local.had_timeout = True
+                    with p.chromium.launch() as browser:
+                        page = browser.new_page()
+                        try:
+                            # Wait for the load event, then give JavaScript 3 seconds to build the DOM.
+                            page.goto(url, wait_until="load", timeout=self.timeout * 1000)
+                            page.wait_for_timeout(3000)
+                        except PlaywrightTimeoutError:
+                            self._local.had_timeout = True
 
-                    # Extract localStorage directly
-                    storage = page.evaluate("""()=>{
-                        const s = [];
-                        for (let i = 0; i < localStorage.length; i++) {
-                            s.push({
-                                key: localStorage.key(i),
-                                value: localStorage.getItem(localStorage.key(i))
-                            });
-                        }
-                        return s;
-                    }""")
-                    
-                    # Search for any key that holds a language value and detect its format
-                    target_key = None
-                    injection_set = []
-                    
-                    for item in storage:
-                        val = str(item.get('value', ''))
-                        for detect_vals, inject_vals in LANG_STORAGE_FORMATS:
-                            if val in detect_vals:
-                                target_key = item.get('key')
-                                injection_set = inject_vals
-                                break
-                        if target_key:
-                            break
-                            
-                    # Capture original page content before any storage injection
-                    original_html = page.content()
-
-                    if target_key:
-                        # Inject all 3 values and verify unicode
-                        missing_injection = []
-                        langs = LANGUAGE_KEY
+                        # Extract localStorage directly
+                        storage = page.evaluate("""()=>{
+                            const s = [];
+                            for (let i = 0; i < localStorage.length; i++) {
+                                s.push({
+                                    key: localStorage.key(i),
+                                    value: localStorage.getItem(localStorage.key(i))
+                                });
+                            }
+                            return s;
+                        }""")
                         
-                        for i in range(3):
-                            base_lang = langs[i]
-                            inject_val = injection_set[i]
-                            
-                            page.evaluate("([key, val]) => window.localStorage.setItem(key, val)", [target_key, inject_val])
-                            try:
-                                page.reload(wait_until="load", timeout=self.timeout * 1000)
-                                page.wait_for_timeout(3000)
-                            except PlaywrightTimeoutError:
-                                pass
+                        # Search for any key that holds a language value and detect its format
+                        target_key = None
+                        injection_set = []
+                        
+                        for item in storage:
+                            val = str(item.get('value', ''))
+                            for detect_vals, inject_vals in LANG_STORAGE_FORMATS:
+                                if val in detect_vals:
+                                    target_key = item.get('key')
+                                    injection_set = inject_vals
+                                    break
+                            if target_key:
+                                break
                                 
-                            current_html = page.content()
-                            current_soup = BeautifulSoup(current_html, 'html.parser')
-                            _, missing_unicode = self._check_unicode_content(current_soup)
-                            
-                            if base_lang in missing_unicode:
-                                missing_injection.append(base_lang)
-                                
-                        if len(missing_injection) == 0:
-                            browser.close()
-                            return (True, missing_injection, "BROWSER_STORAGE")
+                        # Capture original page content before any storage injection
+                        original_html = page.content()
 
-                    html = original_html
-                    browser.close()
+                        if target_key:
+                            # Inject all 3 values and verify unicode
+                            missing_injection = []
+                            langs = LANGUAGE_KEY
+                            
+                            for i in range(3):
+                                base_lang = langs[i]
+                                inject_val = injection_set[i]
+                                
+                                page.evaluate("([key, val]) => window.localStorage.setItem(key, val)", [target_key, inject_val])
+                                try:
+                                    page.reload(wait_until="load", timeout=self.timeout * 1000)
+                                    page.wait_for_timeout(3000)
+                                except PlaywrightTimeoutError:
+                                    pass
+                                    
+                                current_html = page.content()
+                                current_soup = BeautifulSoup(current_html, 'html.parser')
+                                _, missing_unicode = self._check_unicode_content(current_soup)
+                                
+                                if base_lang in missing_unicode:
+                                    missing_injection.append(base_lang)
+                                    
+                            if len(missing_injection) == 0:
+                                return (True, missing_injection, "BROWSER_STORAGE")
+
+                        html = original_html
 
             soup = BeautifulSoup(html, 'html.parser')
             passed_url_loc, missing_url_localization = self._check_url_localization_patterns(soup)

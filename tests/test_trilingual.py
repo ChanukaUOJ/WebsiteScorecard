@@ -188,7 +188,8 @@ def test_check_google_translate(checker):
 def test_verify_google_translate_languages_pass(mock_playwright, checker):
     mock_browser = MagicMock()
     mock_page = MagicMock()
-    mock_playwright.return_value.__enter__.return_value.chromium.launch.return_value = mock_browser
+    # p.chromium.launch() is now used as a context manager: `with p.chromium.launch() as browser`
+    mock_playwright.return_value.__enter__.return_value.chromium.launch.return_value.__enter__.return_value = mock_browser
     mock_browser.new_page.return_value = mock_page
     
     # Mock evaluate to return found options
@@ -203,7 +204,8 @@ def test_verify_google_translate_languages_pass(mock_playwright, checker):
 def test_browser_storage_keys_pass(mock_playwright, checker):
     mock_browser = MagicMock()
     mock_page = MagicMock()
-    mock_playwright.return_value.__enter__.return_value.chromium.launch.return_value = mock_browser
+    # p.chromium.launch() is now used as a context manager: `with p.chromium.launch() as browser`
+    mock_playwright.return_value.__enter__.return_value.chromium.launch.return_value.__enter__.return_value = mock_browser
     mock_browser.new_page.return_value = mock_page
     
     # Return one storage item matching our format
