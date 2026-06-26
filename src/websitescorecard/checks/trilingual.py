@@ -51,6 +51,7 @@ class TrilingualCheck:
 
     def __init__(self, timeout: float = 10.0) -> None:
         self.timeout = timeout
+        self._local = threading.local()
 
     def _check_html_attribute(self, url: str, soup: BeautifulSoup) -> tuple[bool, list[str]]:
         base_domain = urlparse(url).netloc
@@ -258,7 +259,7 @@ class TrilingualCheck:
                             page.goto(url, wait_until="load", timeout=30000)
                             page.wait_for_timeout(2000)
                         except PlaywrightTimeoutError:
-                            self._had_timeout = True
+                            self._local.had_timeout = True
                             context.close()
                             continue
                             
@@ -313,7 +314,7 @@ class TrilingualCheck:
             return [lang for lang in langs_to_check if lang not in found_langs]
         except Exception as exc:
             logger.debug("Language button verification failed: %s", exc)
-            self._had_timeout = True
+            self._local.had_timeout = True
             return missing
 
     def _check_browser_storage_keys(self, url) -> tuple[bool, list[str], str]:
@@ -327,7 +328,7 @@ class TrilingualCheck:
                         page.goto(url, wait_until="load", timeout=self.timeout * 1000)
                         page.wait_for_timeout(3000)
                     except PlaywrightTimeoutError:
-                        self._had_timeout = True
+                        self._local.had_timeout = True
 
                     # Extract localStorage directly
                     storage = page.evaluate("""()=>{
@@ -419,7 +420,7 @@ class TrilingualCheck:
             return (len(missing) == 0, missing, f"{criteria_str}")
         except Exception as exc:
             logger.debug("Browser storage check failed: %s", exc)
-            self._had_timeout = True
+            self._local.had_timeout = True
             return (False, list(LANGUAGE_KEY), "ERROR")
     
     def _analyze_soup(self, url: str, soup: BeautifulSoup) -> tuple[set[str], str | None, list[str]]:
@@ -509,7 +510,7 @@ class TrilingualCheck:
         except ValueError as exc:
             return TrilingualCheckResult(status="UNREACHABLE", error=str(exc))
 
-        self._had_timeout = False
+        self._local.had_timeout = False
 
         try:
             headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
@@ -570,14 +571,14 @@ class TrilingualCheck:
                         return TrilingualCheckResult(status="TRILINGUAL", error=None, details=f"DEEPLINK_CRAWL: {', '.join(unique_criteria)}", deeplink=", ".join(checked_links))
                 except Exception as exc:
                     if 'timeout' in str(exc).lower() or 'timed out' in str(exc).lower():
-                        self._had_timeout = True
+                        self._local.had_timeout = True
                     continue
 
             # Fallback to Playwright on homepage
             try:
                 _, missing_browser, browser_method = self._check_browser_storage_keys(response.url)
             except Exception:
-                self._had_timeout = True
+                self._local.had_timeout = True
                 missing_browser = list(LANGUAGE_KEY)
                 browser_method = "ERROR"
             missing_set = set(LANGUAGE_KEY) - found_langs
@@ -590,7 +591,7 @@ class TrilingualCheck:
             try:
                 missing_click = self._verify_language_buttons_via_browser(response.url, list(missing_set))
             except Exception:
-                self._had_timeout = True
+                self._local.had_timeout = True
                 missing_click = list(missing_set)
             missing_set = missing_set & set(missing_click)
 
@@ -612,7 +613,7 @@ class TrilingualCheck:
                 if len(display_missing) == 0:
                     display_missing = missing_set
 
-                if self._had_timeout:
+                if getattr(self._local, 'had_timeout', False):
                      return TrilingualCheckResult(status="TIMEOUT", error=f"Some checks timed out. Potentially missing: {', '.join(sorted(display_missing))}")
                 return TrilingualCheckResult(status="NON_TRILINGUAL", error=f"missing languages: {', '.join(sorted(display_missing))}")
 
